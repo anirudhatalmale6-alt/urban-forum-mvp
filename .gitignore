@@ -1,0 +1,15 @@
+# Secrets et donnees vivantes. Rien de tout cela ne part dans un depot.
+src/config.local.php
+donnees/*.sqlite
+donnees/*.sqlite-wal
+donnees/*.sqlite-shm
+donnees/sauvegardes/
+donnees/medias/*
+!donnees/medias/.gitkeep
+donnees/journal/*
+!donnees/journal/.gitkeep
+*.log
+.DS_Store
+
+# Les captures d'ecran, elles, font partie de la livraison : elles restent
+# suivies. C'est volontaire.

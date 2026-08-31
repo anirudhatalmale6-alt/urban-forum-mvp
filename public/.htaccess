@@ -1,0 +1,31 @@
+# URBAN FORUM — Apache. Sur Hostinger mutualise, mod_rewrite est actif.
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  # Tout ce qui n'est pas un fichier reel passe par index.php.
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ index.php [QSA,L]
+</IfModule>
+
+# Les fichiers PHP autres que le controleur frontal n'ont rien a faire ici,
+# mais si l'un s'y retrouve un jour, il ne sera pas atteignable en direct.
+<FilesMatch "^(?!index\.php$|install\.php$).*\.php$">
+  Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "DENY"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css "access plus 7 days"
+  ExpiresByType application/javascript "access plus 7 days"
+  ExpiresByType image/svg+xml "access plus 30 days"
+</IfModule>
+
+# Pas de listing de repertoire.
+Options -Indexes

@@ -1,0 +1,7 @@
+# Ce repertoire est HORS de la racine web : dans une installation correcte,
+# aucune URL ne peut l'atteindre. Ce fichier est la deuxieme barriere, pour
+# le jour ou quelqu'un deplacerait donnees/ dans public/.
+Require all denied
+<IfModule !mod_authz_core.c>
+  Deny from all
+</IfModule>
