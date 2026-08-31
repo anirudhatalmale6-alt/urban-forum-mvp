@@ -472,19 +472,46 @@ titre("9. Sauvegarde et restauration testees (critere 9)")
 
 code, sortie = php("outils/sauvegarde.php")
 verif("la sauvegarde se termine sans erreur", code == 0, sortie.strip().splitlines()[-1][:80])
-m = re.search(r"Sauvegarde : (\S+\.sql)", sortie)
+m = re.search(r"Sauvegarde : (\S+\.jsonl)", sortie)
 fichier = m.group(1) if m else None
 verif("fichier de sauvegarde produit", fichier is not None and os.path.isfile(fichier),
       str(fichier))
-m = re.search(r"lignes ecrites et relues : (\d+)", sortie)
-verif("la sauvegarde est relue et recomptee", m is not None and int(m.group(1)) > 100,
-      "%s lignes" % (m.group(1) if m else "?"))
+m = re.search(r"lignes ecrites, relues et recomparees : (\d+)", sortie)
+verif("la sauvegarde est relue ET recomparee par empreinte",
+      m is not None and int(m.group(1)) > 100,
+      "%s enregistrements" % (m.group(1) if m else "?"))
 
 if fichier:
     code, sortie = php("outils/restauration.php", fichier, "--essai")
-    verif("restauration d'essai : chaque table retrouve son compte", code == 0,
-          sortie.strip().splitlines()[-1][:90])
+    verif("restauration d'essai : compte ET contenu identiques a la base source",
+          code == 0, sortie.strip().splitlines()[-1][:90])
     verif("la restauration n'a signale aucun ecart", "ECART" not in sortie)
+
+    # La verification doit pouvoir ECHOUER. On abime un seul retour a la
+    # ligne dans un seul message — meme nombre de lignes, contenu different.
+    # C'est precisement le defaut qu'une comparaison de COMPTES laisse
+    # passer, et c'est ce qui est arrive a la premiere version de ce script.
+    abime = os.path.join(RACINE, "donnees", "sauvegardes", "abime-controle.jsonl")
+    touche = False
+    with open(fichier, encoding="utf-8") as src, open(abime, "w", encoding="utf-8") as dst:
+        for ligne in src:
+            l = ligne.rstrip("\n")
+            if l and not touche:
+                try:
+                    o = json.loads(l)
+                except Exception:
+                    o = None
+                if o and o.get("t") == "messages" and "\n" in (o["r"].get("corps") or ""):
+                    o["r"]["corps"] = o["r"]["corps"].replace("\n", "\\n", 1)
+                    l = json.dumps(o, ensure_ascii=False, separators=(",", ":"))
+                    touche = True
+            dst.write(l + "\n")
+    verif("corruption injectee pour eprouver la verification", touche)
+    code, sortie = php("outils/restauration.php", abime, "--essai")
+    verif("une sauvegarde abimee est DETECTEE, pas declaree valide",
+          code != 0 and "ECART" in sortie,
+          "code=%d, ecart signale : %s" % (code, "ECART" in sortie))
+    os.unlink(abime)
 
 # ======================================================================
 titre("10. Journal d'erreurs exploitable (critere 10)")

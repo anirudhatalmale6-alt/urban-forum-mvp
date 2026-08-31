@@ -170,7 +170,7 @@ bandeau.
 python3 tests/tests-forum.py http://127.0.0.1:8830
 ```
 
-**229 contrôles, 0 échec** à la dernière exécution, dans l'ordre des dix
+**231 contrôles, 0 échec** à la dernière exécution, dans l'ordre des dix
 critères de recette de la section 14. Ce qui est réellement mesuré :
 
 1. **Navigation sans compte** — 13 pages publiques, et le *contenu* est
@@ -197,8 +197,9 @@ critères de recette de la section 14. Ce qui est réellement mesuré :
 8. **Permissions** — bloquées côté interface **et** côté API, vérifié pour
    l'anonyme et pour un membre simple, plus CSRF, discussion verrouillée,
    injection, XSS et en-têtes de sécurité.
-9. **Sauvegarde et restauration** — les deux scripts sont exécutés, et la
-   restauration d'essai recompte chaque table.
+9. **Sauvegarde et restauration** — les deux scripts sont exécutés, la
+   restauration d'essai compare **le contenu** et pas seulement les comptes,
+   et une sauvegarde volontairement abîmée doit être **détectée**.
 10. **Journal d'erreurs** — un incident est **provoqué**, puis retrouvé dans
     le journal. Un journal vide passerait toujours.
 
@@ -301,26 +302,42 @@ incomplète.
 ## 9. Sauvegarde et restauration
 
 ```bash
-php outils/sauvegarde.php                      # base + médias
-php outils/restauration.php <fichier.sql> --essai   # test SANS toucher la prod
-php outils/restauration.php <fichier.sql>           # restauration réelle
+php outils/sauvegarde.php                            # base + médias
+php outils/sauvegarde.php --sql                      # + un .sql pour phpMyAdmin
+php outils/restauration.php <fichier.jsonl> --essai  # test SANS toucher la prod
+php outils/restauration.php <fichier.jsonl>          # restauration réelle
 ```
 
 Tout est en PHP : sur un hébergement mutualisé, `mysqldump` est souvent
 inaccessible, et une procédure qui ne marche que sur la machine du
 développeur n'est pas une procédure.
 
-La sauvegarde **relit et recompte** son propre fichier après écriture, et
-l'archive des médias est rouverte pour vérifier son nombre d'entrées. Une
-sauvegarde qu'on n'a pas rouverte n'est pas une sauvegarde, c'est un
-fichier. Le mode `--essai` restaure dans une base jetable et compare les
-comptes table par table : un test de restauration qui écrase la production
-n'est pas un test.
+**Le format est du JSON, une ligne par enregistrement, et pas du SQL.** La
+première version écrivait des `INSERT` et échappait les retours à la ligne
+en `\n` — ce que MySQL redécode en retour à la ligne et que SQLite laisse
+tel quel, deux caractères. Le même fichier restaurait donc un texte
+*différent* selon le moteur. En JSON il n'y a plus d'échappement à inventer,
+et la restauration passe par des requêtes préparées : c'est le pilote qui
+met les valeurs en forme.
+
+**Et la vérification compare le contenu, pas les comptes.** Le premier
+contrôle comparait le nombre de lignes par table : il répondait
+« restauration vérifiée » avec un contenu abîmé, puisque le nombre de lignes,
+lui, ne bouge pas. Le mode `--essai` compare maintenant **trois** empreintes
+— celle du fichier, celle de la base restaurée, et celle de la **base
+d'origine**. Seule la troisième prouve quelque chose : comparer un fichier à
+la base restaurée depuis ce fichier, c'est comparer un fichier à lui-même.
+
+La suite de contrôles abîme volontairement un seul retour à la ligne dans un
+seul message et exige que la vérification le détecte. Même nombre de lignes,
+empreinte différente, échec — c'est ce qui rend le critère 9 crédible.
+
+La sauvegarde relit aussi son propre fichier après écriture et l'archive des
+médias est rouverte pour recompter ses entrées. Une sauvegarde qu'on n'a pas
+rouverte n'est pas une sauvegarde, c'est un fichier.
 
 À copier **hors du serveur** : une sauvegarde qui vit sur la machine
 sauvegardée disparaît avec elle.
-
----
 
 ## 10. API JSON
 
@@ -363,6 +380,15 @@ Elles sont écrites ici pour ne pas être découvertes en production.
   intégré chargé d'office, pour la même raison que les images distantes.
 - Le compteur de vues déduplique par empreinte et par jour : un compteur
   gonflé par les rechargements est un compteur qu'on ne peut plus citer.
+- **Le chemin MySQL n'a pas été exécuté ici.** Les 231 contrôles ont tourné
+  sur SQLite ; je n'ai pas d'instance MySQL accessible sur cette machine. Le
+  DDL MySQL est produit par la même définition et j'ai vérifié à la main les
+  trois pièges connus — `CREATE INDEX` sans `IF NOT EXISTS` (rattrapé sur
+  l'erreur 1061), aucune valeur par défaut sur une colonne `TEXT`, et toutes
+  les colonnes indexées en `UNIQUE` sous la limite de longueur de clé
+  d'`utf8mb4`. Ce n'est pas la même chose que de l'avoir fait tourner :
+  quand tu me donnes une base MySQL, je relance la suite dessus avant de
+  déclarer quoi que ce soit.
 
 ---
 
