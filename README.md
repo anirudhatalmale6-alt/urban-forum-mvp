@@ -1,13 +1,14 @@
-# URBAN FORUM — Phase 1 (MVP)
+# URBAN FORUM — Phase 1 (MVP) + Portail
 
 Plateforme communautaire internationale dédiée à l'urbanisme, l'architecture
-et aux infrastructures. Forum structuré géographiquement, multilingue
-FR / EN / AR, prêt à recevoir les fiches projets et la cartographie de la
-phase 2.
+et aux infrastructures. **Portail éditorial public devant un forum structuré
+géographiquement**, multilingue FR / EN / AR, prêt à recevoir les fiches
+projets et la cartographie de la phase 2.
 
 Référence du cahier des charges : **UF-CDC-01 v1.0**.
-Ce dépôt couvre la **Phase 1 — MVP** de la section 13, et il est vérifié
-contre les **dix critères de recette de la section 14**.
+Ce dépôt couvre la **Phase 1 — MVP** de la section 13, il est vérifié
+contre les **dix critères de recette de la section 14**, et il ajoute le
+**portail** (voir la section 13 ci-dessous).
 
 ---
 
@@ -21,6 +22,13 @@ avec motif, signalements, file et journal de modération, notifications,
 recherche plein texte avec synonymes et tolérance aux fautes, médias,
 i18n FR/EN/AR avec RTL réel, SEO, administration, sauvegarde et
 restauration, API JSON documentée.
+
+**Fait (portail).** Page d'accueil éditoriale, rubriques, articles avec
+chapeau, signature, rattachement géographique et bloc de sources, mise à
+la une, programmation d'une publication à une date future, aperçu des
+brouillons réservé aux rédacteurs, rôle `redacteur` distinct de la
+modération, flux RSS, discussion de forum ouverte depuis un article,
+articles dans les résultats de recherche et dans le sitemap.
 
 **Pas fait, et volontairement (phase 2 et suivantes).** Fiches projets
 remplies, cartographie, entreprises vérifiées, badges attribués
@@ -156,9 +164,12 @@ php outils/purge-demo.php               # compte ce qui serait supprimé
 php outils/purge-demo.php --supprimer   # le fait
 ```
 
-Ce qui disparaît : membres, discussions, messages et médias marqués
-`demo = 1`, avec tout ce qui en dépend. Ce qui reste : la géographie
-(6 continents, 35 pays, 63 villes), la taxonomie, les 115 forums, les rôles.
+Ce qui disparaît : membres, discussions, messages, **articles** et médias
+marqués `demo = 1`, avec tout ce qui en dépend — y compris la discussion
+ouverte depuis un article de démonstration. Ce qui reste : la géographie
+(6 continents, 35 pays, 63 villes), la taxonomie, les 115 forums, les
+**7 rubriques** du portail et les rôles. Une rubrique vide affiche « aucun
+article pour l'instant », qui est l'état normal d'un portail neuf.
 Ensuite, `'mode_demo' => false` dans `src/config.local.php` retire le
 bandeau.
 
@@ -170,11 +181,12 @@ bandeau.
 python3 tests/tests-forum.py http://127.0.0.1:8830
 ```
 
-**231 contrôles, 0 échec** à la dernière exécution, dans l'ordre des dix
-critères de recette de la section 14. Ce qui est réellement mesuré :
+**322 contrôles, 0 échec** à la dernière exécution, dans l'ordre des dix
+critères de recette de la section 14, plus une section entière consacrée au
+portail. Ce qui est réellement mesuré :
 
-1. **Navigation sans compte** — 13 pages publiques, et le *contenu* est
-   compté : 53 liens de forum, 63 villes, 11 discussions. Une page qui
+1. **Navigation sans compte** — 18 pages publiques, et le *contenu* est
+   compté : liens de forum, villes, discussions et articles. Une page qui
    répond 200 autour de zéro contenu est une page cassée.
 2. **Inscription → connexion → discussion → réponse → image** — parcours
    complet par HTTP. Le rendu du gras, de la citation, de la liste et de la
@@ -192,7 +204,7 @@ critères de recette de la section 14. Ce qui est réellement mesuré :
    `DiscussionForumPosting`, `BreadcrumbList`, et **aucun débordement
    horizontal** mesuré sur `scrollWidth` à 1280 et 390 px.
 7. **FR / EN / AR** — les trois dictionnaires portent exactement les mêmes
-   233 clés, et la marque se déplace réellement de x=56 px à x=981 px quand
+   310 clés, et la marque se déplace réellement de x=56 px à x=981 px quand
    on passe en arabe.
 8. **Permissions** — bloquées côté interface **et** côté API, vérifié pour
    l'anonyme et pour un membre simple, plus CSRF, discussion verrouillée,
@@ -203,8 +215,17 @@ critères de recette de la section 14. Ce qui est réellement mesuré :
 10. **Journal d'erreurs** — un incident est **provoqué**, puis retrouvé dans
     le journal. Un journal vide passerait toujours.
 
+11. **Le portail** — un brouillon et un article programmé répondent 404 au
+    public et n'apparaissent ni dans `/actualites`, ni dans la recherche, ni
+    dans le flux, ni dans le sitemap ; un membre simple ne peut pas écrire ;
+    sans `portail.publier` le serveur ramène l'article à « brouillon » ; un
+    article ouvre bien une discussion qui pointe vers lui sans le recopier ;
+    le HTML saisi ressort échappé ; un titre entièrement arabe produit une
+    adresse ASCII qui répond 200 ; le flux et le sitemap répondent 503 sans
+    domaine et sont corrects avec.
+
 Plus : contraste WCAG AA mesuré sur les couleurs **calculées par le
-navigateur** sur 28 pages, zéro erreur de console, et le parcours complet
+navigateur** sur 36 pages, zéro erreur de console, et le parcours complet
 rejoué **avec JavaScript désactivé**.
 
 ### Ce que la suite a réellement attrapé
@@ -220,11 +241,20 @@ Elle n'est pas décorative. Pendant le développement elle a trouvé :
   contraste, il en a un **par fond** ;
 - `.chiffre span` sur la bande sombre : 2,24 pour 1.
 
-Aucune de ces quatre ne se voit en relisant la feuille de style. Et une
-mutation volontaire — donner `moderation.file` au rôle *membre* — a bien été
-attrapée des deux côtés, interface et API : la suite peut échouer.
+Aucune de ces quatre ne se voit en relisant la feuille de style.
 
-Captures : `apercus/`, 26 images, toutes sous 2000 px.
+Pour le portail elle a trouvé, en plus : **les adresses non-ASCII qui
+répondaient 404** et **les permissions qui ne venaient pas de la base**
+(section 13).
+
+Elle peut échouer, et c'est vérifié plutôt qu'affirmé. Deux mutations
+volontaires ont été passées au rouge : donner `moderation.file` au rôle
+*membre* (attrapé côté interface **et** côté API), et retirer la condition
+« date de publication passée » du portail (quatre contrôles au rouge, dont
+l'index de recherche qui contenait alors un article de plus qu'il n'y a
+d'articles visibles).
+
+Captures : `apercus/`, 40 images, toutes sous 2000 px.
 
 ---
 
@@ -344,10 +374,13 @@ sauvegardée disparaît avec elle.
 `GET /api/v1` liste les points d'entrée.
 
 ```
+GET  /api/v1/portail
+GET  /api/v1/articles?rubrique=&langue=&page=1
+GET  /api/v1/articles/{slug}
 GET  /api/v1/forums
 GET  /api/v1/forums/{slug}?page=1
 GET  /api/v1/discussions/{slug}?page=1
-GET  /api/v1/recherche?q=&espace=forum|projets&tri=pertinence|date|activite
+GET  /api/v1/recherche?q=&espace=forum|projets|portail&tri=pertinence|date|activite
 GET  /api/v1/autocomplete?q=
 GET  /api/v1/notifications
 GET  /api/v1/moderation/file
@@ -358,6 +391,11 @@ POST /api/v1/messages     (discussion, corps, _csrf)
 Authentification par le cookie de session ; les écritures exigent le jeton
 `_csrf`, comme les formulaires. Les permissions sont exactement celles de
 l'interface.
+
+`/api/v1/articles/{slug}` sert le HTML **déjà assaini** : un consommateur de
+l'API n'a jamais à interpréter lui-même la syntaxe de l'éditeur. Et l'API
+n'a **pas** de mode aperçu : un brouillon y répond 404 même pour un
+rédacteur connecté, alors que l'interface le lui montre avec un bandeau.
 
 ---
 
@@ -398,3 +436,92 @@ Phase 2, dans l'ordre où je la propose : fiches projets structurées avec
 sources et historique, puis cartographie. La carte a besoin des coordonnées
 des villes — c'est la seule donnée bloquante, et l'écran *Taxonomie* permet
 déjà de les saisir une par une ou de les laisser vides.
+
+---
+
+## 13. Le portail
+
+### Ce qu'il est
+
+Le forum est une conversation ; le portail est ce que voit quelqu'un qui
+n'a pas encore de compte. Il lit, il comprend de quoi parle le site, et
+s'il veut participer il descend dans la discussion attachée à l'article.
+
+- `/` — le portail : à la une, derniers articles, rubriques, dernières
+  discussions du forum, villes, chiffres.
+- `/actualites` — tous les articles publiés, filtrables par langue.
+- `/r/<rubrique>` — une rubrique.
+- `/a/<article>` — un article.
+- `/flux.xml` — le flux RSS.
+- `/communaute` — l'ancienne page d'accueil du forum. Elle n'a pas disparu,
+  elle a changé d'adresse.
+- `/admin/articles` — la rédaction, réservée à `portail.rediger`.
+
+### Trois règles qui ne sont pas décoratives
+
+**Un article est écrit dans UNE langue, pas dans trois.** La colonne
+`groupe` relie les versions d'un même sujet ; `langue` dit dans laquelle
+celle-ci est écrite. Trois colonnes `titre_fr` / `titre_en` / `titre_ar`
+auraient obligé à inventer une traduction pour pouvoir enregistrer — et une
+traduction inventée est un texte que personne n'a relu. Quand un lecteur
+arabe ouvre le portail, il voit la version arabe d'un sujet si elle existe
+*vraiment* ; sinon il voit l'original, avec une étiquette de langue et les
+attributs `lang` / `dir` qui vont avec.
+
+**Une date de publication dans le futur est une programmation.** Elle est
+relue à *chaque affichage*, pas testée une fois à l'enregistrement. Un
+article daté de la semaine prochaine n'apparaît ni sur le portail, ni dans
+le flux, ni dans le sitemap, ni dans la recherche, et son adresse directe
+répond 404 au public. Un rédacteur connecté, lui, la voit avec un bandeau
+d'aperçu et un `noindex`.
+
+**Publier est une permission séparée d'écrire.** `portail.rediger` permet
+d'écrire et d'enregistrer ; `portail.publier` de mettre en ligne ;
+`portail.une` de choisir la une. Sans `portail.publier`, l'interface cache
+le bouton **et le serveur ramène l'article à « brouillon »** même si le
+champ est forgé. L'interface qui cache et le serveur qui refuse sont deux
+choses différentes ; seule la seconde protège.
+
+### Les sources
+
+Un budget, une hauteur, une date de livraison sont des faits : ils viennent
+d'une source ou ils ne sont pas écrits. Chaque article a un bloc *Sources*
+(table `sources`, la même que pour les fiches projets). **S'il est vide, la
+page le dit** : « cet article ne cite aucune source ». La mention est là
+pour se voir. Un texte sans source doit ressembler à un texte sans source,
+pas à une information vérifiée.
+
+Les articles de démonstration livrés n'affirment rien sur un projet réel :
+ils expliquent le fonctionnement du portail. Et ils ne citent aucune
+source, volontairement — c'est ce qui rend la mention visible.
+
+### Deux corrections trouvées en construisant le portail
+
+**Les adresses non-ASCII répondaient 404.** Les motifs de la table de
+routage s'écrivent `[\w\-]+`, et `\w` sans le drapeau `/u` ne couvre que
+l'ASCII. Un titre arabe produisait un slug que le routeur ne reconnaissait
+plus : la page répondait 404 alors que la ligne existait en base. Une
+discussion arabe de la démonstration était dans ce cas depuis la première
+livraison. `slug()` produit désormais de l'ASCII, et l'installeur réécrit
+les adresses fautives une fois, au passage.
+
+La translittération seule ne suffisait pas : `Any-Latin; Latin-ASCII`
+laisse passer des lettres modificatives comme « ʿ » (U+02BF) ou « ⁿ »
+(U+207F), qui ressemblent à de l'ASCII sans en être.
+
+**Les permissions ne venaient pas de la base.** `peut()` lisait la
+constante `ROLES` du code ; la table `role_permissions`, remplie par
+l'installeur, n'était jamais relue. Elle était donc décorative, et la page
+d'administration des rôles montrait le code plutôt que ce que le serveur
+applique. C'est maintenant la table qui fait foi, avec deux garde-fous :
+un rôle déclaré `*` reste tout-puissant sans passer par la table, et un
+rôle sans aucune ligne retombe sur la déclaration du code — une table vide
+veut dire « pas encore installé », jamais « plus aucun droit ».
+
+### Un délai qu'il faut connaître
+
+Après modification de `src/config.local.php`, **le serveur met quelques
+secondes à voir le changement** — mesuré jusqu'à trois secondes ici. C'est
+le comportement normal d'un cache de bytecode. Si le domaine vient d'être
+renseigné et que `/flux.xml` répond encore 503, il suffit d'attendre et de
+recharger.

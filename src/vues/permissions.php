@@ -2,13 +2,18 @@
 <h2><?= h(t('adm_permissions')) ?></h2>
 <div class="tableau-boite"><table class="tableau">
   <thead><tr><th><?= h(t('role_membre')) ?></th><th>rang</th><th>n</th><th>permissions</th></tr></thead>
-  <tbody><?php foreach ($roles as $r): $def = ROLES[$r['cle']] ?? null; ?>
+  <?php /* Les permissions affichees sont celles que le serveur APPLIQUE,
+           c'est-a-dire celles de la table role_permissions — pas la
+           declaration du code. Si les deux divergent, c'est la table qui
+           gagne a l'execution ; une page qui montrerait le code montrerait
+           donc autre chose que la realite. */ ?>
+  <tbody><?php foreach ($roles as $r): $perms = permissions_de_role((string) $r['cle']); ?>
     <tr>
       <td><?= badge_role((string) $r['cle']) ?></td>
       <td><?= h(nombre((int) $r['rang'])) ?></td>
       <td><?= h(nombre((int) $r['nb'])) ?></td>
-      <td><?php if (($def['perms'] ?? null) === '*'): ?><b>*</b><?php else: ?>
-        <?php foreach ($def['perms'] ?? [] as $p): ?><code><?= h($p) ?></code> <?php endforeach; ?>
+      <td><?php if ($perms === '*'): ?><b>*</b><?php else: ?>
+        <?php foreach ($perms as $p): ?><code><?= h($p) ?></code> <?php endforeach; ?>
       <?php endif; ?></td>
     </tr>
   <?php endforeach; ?></tbody>

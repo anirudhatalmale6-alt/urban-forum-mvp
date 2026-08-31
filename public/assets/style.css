@@ -98,7 +98,7 @@ a:hover{text-decoration:underline}
   border-radius:99px;padding:1px 7px;white-space:nowrap;
 }
 .nav{display:flex;gap:2px;flex-wrap:wrap}
-.nav a{padding:7px 11px;border-radius:var(--r);color:var(--gris-700);font-size:15px}
+.nav a{padding:7px 9px;border-radius:var(--r);color:var(--gris-700);font-size:15px}
 .nav a:hover{background:var(--gris-100);color:var(--encre);text-decoration:none}
 
 .rech-rapide{display:flex;gap:6px;margin-inline-start:auto;flex:1 1 180px;max-width:300px}
@@ -107,8 +107,26 @@ a:hover{text-decoration:underline}
   border-radius:var(--r);font:inherit;font-size:15px;background:var(--gris-050);
 }
 .rech-rapide button{
-  padding:8px 14px;border:1px solid var(--bleu-600);background:var(--bleu-600);
+  padding:8px 12px;border:1px solid var(--bleu-600);background:var(--bleu-600);
   color:var(--blanc);border-radius:var(--r);font:inherit;font-size:14px;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
+}
+/* L'entete doit tenir sur UNE ligne sur un ecran large. Toutes les valeurs
+   ci-dessous viennent de MESURES de la hauteur rendue, pas d'une addition
+   de largeurs faite a la main.
+       marque 274 + navigation 314 + recherche 190 + compte 372 = 1150,
+       plus les gouttieres = 1186, pour 1168 px disponibles.
+   Il manquait donc une vingtaine de pixels EN FRANCAIS seulement (l'anglais
+   et l'arabe tenaient deja).
+   Mesure decisive : en retirant la pastille « nom provisoire », le francais
+   passe de 118 px a 64 px de hauteur. Ces 100 px sont ceux de la pastille.
+   Elle disparait des que 'nom_provisoire' passe a false dans config.php,
+   c'est-a-dire des que la plateforme a son vrai nom. Rien a corriger : la
+   deuxieme ligne s'en va avec elle. */
+@media (min-width:1100px){
+  .rech-rapide{max-width:190px}
+  .entete__barre{gap:12px}
+  .langues{gap:6px}
 }
 .compte{display:flex;align-items:center;gap:10px;font-size:15px;flex-wrap:wrap}
 .compte a{display:inline-flex;align-items:center;gap:6px;color:var(--gris-700)}
@@ -297,7 +315,13 @@ h3{font:600 17px/1.35 var(--sys);margin:20px 0 8px}
 .sans-marge{margin:0}
 .page--etroite{max-width:760px}
 .mdp{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:18px}
-.ta-court{min-height:110px}
+/* `.champ textarea` (0,1,1) bat `.ta-court` (0,1,0), quel que soit l'ordre
+   des regles : la classe seule ne raccourcissait RIEN, ni ici, ni sur la
+   biographie, ni sur le commentaire de signalement. Trouve en regardant la
+   capture du formulaire de redaction — un chapeau de trois lignes s'y
+   affichait dans une zone de 170 px. Meme piege que `.compte a` contre
+   `.btn--plein` plus haut. */
+.champ textarea.ta-court{min-height:110px}
 .champ--bas{align-self:end}
 .carte--profil{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
 .badge-role{font-size:11px;padding:1px 7px;border-radius:99px;background:var(--gris-100);
@@ -353,6 +377,156 @@ h3{font:600 17px/1.35 var(--sys);margin:20px 0 8px}
 .bande a.btn--plein{background:var(--blanc);border-color:var(--blanc);color:var(--encre)}
 .bande .vide{background:transparent;color:#F0C97A}
 
+/* ============================ portail ==============================
+   Le portail est la couche editoriale posee devant le forum. Deux
+   contraintes gouvernent ce bloc, et elles sont les memes que partout
+   ailleurs dans ce fichier :
+
+   1. Propriétés logiques uniquement. Une carte d'article a une image et
+      un texte cote a cote ; en arabe, l'image doit passer a droite SANS
+      qu'une seule ligne ne soit ecrite pour l'arabe. C'est le role de
+      `padding-inline`, `border-inline-start` et de l'ordre du flux.
+   2. Aucune couleur de texte n'est choisie « parce qu'elle est discrete ».
+      Les metadonnees des cartes utilisent gris-700 (7,4:1) et non gris-500
+      (4,6:1) : les cartes tombent parfois sur gris-050, ou gris-500 vaut
+      4,35:1 et passe sous le seuil. Un jeton de couleur n'a pas UN
+      contraste, il en a un PAR FOND.
+   ================================================================== */
+
+.hero{
+  border:1px solid var(--gris-200);border-radius:var(--r);
+  background:var(--gris-050);padding:28px 24px;margin-block-end:28px;
+}
+.hero h1{margin-block-end:10px}
+.hero__actions{display:flex;flex-wrap:wrap;gap:10px;margin:0}
+.hero--portail .lede{margin-block-end:18px;font-size:18px}
+
+.encart{
+  border:1px dashed var(--gris-300);border-radius:var(--r);
+  background:var(--blanc);padding:24px;margin-block-end:28px;
+}
+.encart h2{margin-block-start:0}
+.encart p{color:var(--gris-700);max-width:70ch}
+
+.bloc{margin-block:34px}
+.bloc__tete{
+  display:flex;align-items:baseline;justify-content:space-between;
+  gap:12px;flex-wrap:wrap;border-block-end:1px solid var(--gris-200);
+  padding-block-end:8px;margin-block-end:16px;
+}
+.bloc__tete h2,.bloc__tete h3{margin:0}
+.bloc__nb{font-size:13px;color:var(--gris-700)}
+
+/* Cartes d'article ------------------------------------------------- */
+.grille-art{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(255px,1fr))}
+.une{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(255px,1fr))}
+/* La carte de tete occupe toute la largeur et met son image a cote du
+   texte. `grid-column:1/-1` ne connait ni gauche ni droite : la meme
+   regle vaut en LTR et en RTL. */
+.une .carte-art--grande{grid-column:1/-1}
+
+.carte-art{
+  display:flex;flex-direction:column;
+  border:1px solid var(--gris-200);border-radius:var(--r);
+  background:var(--blanc);overflow:hidden;
+}
+.carte-art:hover{border-color:var(--gris-300);box-shadow:var(--ombre)}
+.carte-art__img{display:block;background:var(--gris-100);line-height:0}
+.carte-art__img img{inline-size:100%;block-size:auto;object-fit:cover;aspect-ratio:16/9}
+.carte-art__corps{padding:14px 16px 16px;display:flex;flex-direction:column;gap:6px;flex:1}
+.carte-art__sur{display:flex;flex-wrap:wrap;gap:6px;margin:0}
+.carte-art__titre{margin:0;font:600 17px/1.35 var(--sys)}
+.carte-art__titre a{color:var(--encre)}
+.carte-art__titre a:hover{color:var(--bleu-700)}
+.carte-art__chapeau{margin:0;color:var(--gris-700);font-size:14px}
+.carte-art__meta{margin:auto 0 0;color:var(--gris-700);font-size:13px;padding-block-start:6px}
+
+@media (min-width:760px){
+  .carte-art--grande{flex-direction:row}
+  .carte-art--grande .carte-art__img{flex:0 0 46%}
+  .carte-art--grande .carte-art__img img{block-size:100%;aspect-ratio:auto}
+  .carte-art--grande .carte-art__corps{padding:22px 24px}
+  .carte-art--grande .carte-art__titre{font-size:23px;line-height:1.25}
+  .carte-art--grande .carte-art__chapeau{font-size:16px}
+}
+
+.etiq--rub{background:var(--bleu-050);color:var(--bleu-700)}
+.etiq--langue{background:var(--gris-100);color:var(--gris-700)}
+.etiq--une{background:var(--ambre-050);color:var(--ambre-700)}
+
+/* Rubriques sur le portail ----------------------------------------- */
+.rub-bloc{
+  border-inline-start:3px solid var(--gris-200);
+  padding-inline-start:16px;margin-block-end:26px;
+}
+.rub-bloc__desc{color:var(--gris-700);font-size:14px;margin:0 0 10px;max-width:70ch}
+.liste-liens{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.liste-liens li{
+  display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  border-block-end:1px solid var(--gris-100);padding-block-end:8px;
+}
+.liste-liens li:last-child{border-block-end:0}
+.liste-liens time{color:var(--gris-700);font-size:13px;white-space:nowrap}
+
+/* Page d'article ---------------------------------------------------- */
+.tete-page{margin-block-end:20px}
+.article{max-width:760px}
+.article__tete h1{margin-block:6px 12px}
+.article__sur{display:flex;flex-wrap:wrap;gap:6px;margin:0}
+.article__chapeau{font-size:19px;line-height:1.55;color:var(--gris-800);margin:0 0 14px}
+.article__meta{color:var(--gris-700);font-size:14px;margin:0 0 22px}
+.article__figure{margin:0 0 24px}
+.article__figure img{inline-size:100%;block-size:auto;border-radius:var(--r)}
+.article__figure figcaption{color:var(--gris-700);font-size:13px;margin-block-start:6px}
+/* Le corps est en serif : un texte long se lit mieux, et l'oeil distingue
+   immediatement l'article de l'interface qui l'entoure. */
+.article__corps{font:17px/1.75 var(--serif)}
+.article__corps p{margin:0 0 18px}
+.article__corps h2,.article__corps h3{font-family:var(--sys)}
+.article__corps img{max-inline-size:100%;block-size:auto;border-radius:var(--r)}
+body.lang-ar .article__corps{font-family:var(--sys);font-size:18px;line-height:1.95}
+
+.article__sources{
+  border-block-start:1px solid var(--gris-200);margin-block-start:28px;padding-block-start:12px;
+}
+.article__sources h2{font-size:16px;margin-block-start:14px}
+.sources{margin:0;padding-inline-start:20px;font-size:14px;display:grid;gap:8px}
+.sources__editeur{color:var(--gris-700);margin-inline-start:6px}
+.article__trad{font-size:14px;color:var(--gris-700);margin-block-start:18px}
+.article__trad a{margin-inline-end:10px}
+.article__discussion{
+  background:var(--gris-050);border:1px solid var(--gris-200);
+  border-radius:var(--r);padding:20px 22px;max-width:760px;
+}
+.article__discussion h2{margin-block-start:0}
+.note{color:var(--gris-700);font-size:14px;max-width:70ch}
+/* Un tiret NEUTRE, a ne pas confondre avec la pastille `.vide` : celle-ci
+   signale une valeur que le proprietaire doit fournir, celui-la une case
+   qui n'a simplement pas de contenu a cet etat-la. */
+.sans-valeur{color:var(--gris-700)}
+
+/* Listes et filtres -------------------------------------------------- */
+.filtres{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-block-end:18px}
+.filtres label{font-size:14px;font-weight:600;align-self:center}
+.filtres select{padding:8px 10px;border:1px solid var(--gris-300);border-radius:var(--r);font:inherit}
+.filtres button{padding:8px 14px;border:1px solid var(--gris-300);border-radius:var(--r);
+  background:var(--blanc);font:inherit;cursor:pointer}
+.compte-resultats{color:var(--gris-700);font-size:14px;margin-block-end:14px}
+.lien-discret{font-size:14px;color:var(--gris-700);align-self:center;margin-inline-start:auto}
+
+/* Redaction ---------------------------------------------------------- */
+.barre-actions{display:flex;flex-wrap:wrap;gap:8px;margin-block:16px 22px}
+.btn--actif{background:var(--encre);border-color:var(--encre);color:var(--blanc)}
+.bloc-champ{
+  border:1px solid var(--gris-200);border-radius:var(--r);
+  padding:18px 20px;margin-block-end:22px;
+}
+.bloc-champ legend{font-weight:700;font-size:14px;padding-inline:6px}
+.champ--case{display:flex;align-items:center;gap:8px}
+.champ--case label{margin:0}
+.chiffres--compact{grid-template-columns:repeat(auto-fit,minmax(130px,1fr));margin-block-end:18px}
+.chiffres--compact .chiffre b{font-size:22px}
+
 /* ------------------------------ pied -------------------------------- */
 .pied{border-block-start:1px solid var(--gris-200);background:var(--gris-050);
   padding:32px 16px;font-size:14px}
@@ -390,6 +564,11 @@ h3{font:600 17px/1.35 var(--sys);margin:20px 0 8px}
   .liste__ligne{grid-template-columns:1fr auto}
   .liste__dernier{grid-column:1/-1;min-width:0}
   h1{font-size:25px}
+  .hero{padding:20px 16px}
+  .grille-art,.une{grid-template-columns:1fr}
+  .article__chapeau{font-size:17px}
+  .article__corps{font-size:16px}
+  .lien-discret{margin-inline-start:0;flex-basis:100%}
 }
 
 @media print{

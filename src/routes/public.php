@@ -250,7 +250,12 @@ function page_continent(string $slug): void
 function page_recherche(): void
 {
     $q = trim((string) ($_GET['q'] ?? ''));
-    $espace = ($_GET['espace'] ?? 'forum') === 'projets' ? 'projets' : 'forum';
+    // Liste BLANCHE. La valeur part directement dans la clause « espace = ? »
+    // de l'index ; tout ce qui n'est pas reconnu retombe sur le forum, plutot
+    // que de chercher dans un espace invente qui renverrait zero resultat
+    // sans le moindre message.
+    $espace = in_array($_GET['espace'] ?? '', ['forum', 'projets', 'portail'], true)
+        ? $_GET['espace'] : 'forum';
     $tri = in_array($_GET['tri'] ?? '', ['pertinence', 'date', 'activite'], true)
          ? $_GET['tri'] : 'pertinence';
     $page = max(1, (int) ($_GET['page'] ?? 1));

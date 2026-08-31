@@ -203,6 +203,20 @@ function charger_resultat(string $type, int $id): ?array
             'extrait' => extrait((string) $m['corps']),
         ];
     }
+    if ($type === 'article') {
+        // La condition de visibilite est REJOUEE ici. L'index peut avoir une
+        // seconde de retard sur un retrait ; la lecture, elle, ne ment pas.
+        $a = qun('SELECT * FROM articles WHERE id = ? AND statut = ?
+                  AND publie_le IS NOT NULL AND publie_le <= ?',
+                 [$id, 'publie', maintenant()]);
+        if (!$a) return null;
+        return [
+            'type' => 'article', 'id' => $id, 'titre' => $a['titre'],
+            'url' => '/a/' . $a['slug'], 'auteur' => $a['signature'],
+            'date' => $a['publie_le'], 'activite' => (int) $a['nb_vues'],
+            'extrait' => extrait((string) ($a['chapeau'] ?: $a['corps'])),
+        ];
+    }
     if ($type === 'projet') {
         $p = qun('SELECT * FROM projets WHERE id = ?', [$id]);
         if (!$p) return null;
@@ -250,7 +264,7 @@ function autocomplete(string $debut, int $max = 8): array
 function reindexer_tout(): array
 {
     q('DELETE FROM index_recherche');
-    $n = ['discussion' => 0, 'message' => 0, 'projet' => 0];
+    $n = ['discussion' => 0, 'message' => 0, 'projet' => 0, 'article' => 0];
     foreach (qtous('SELECT id FROM discussions WHERE masquee = 0') as $r) {
         indexer_discussion((int) $r['id']); $n['discussion']++;
     }
@@ -262,6 +276,18 @@ function reindexer_tout(): array
                 [5 => $p['nom_officiel'] . ' ' . $p['nom_usuel'], 2 => $p['resume'],
                  1 => $p['description']]);
         $n['projet']++;
+    }
+    // Seuls les articles REELLEMENT publies entrent dans l'index : un
+    // brouillon ou un article programme pour la semaine prochaine n'a rien a
+    // faire dans une recherche publique, et son titre seul suffirait a
+    // reveler ce qui n'est pas encore sorti. La condition est ecrite ici et
+    // non deleguee, pour que ce fichier reste utilisable par l'installeur
+    // sans dependre de src/portail.php.
+    foreach (qtous('SELECT * FROM articles WHERE statut = ? AND publie_le IS NOT NULL
+                    AND publie_le <= ?', ['publie', maintenant()]) as $a) {
+        indexer('portail', 'article', (int) $a['id'],
+                [5 => $a['titre'], 3 => (string) $a['chapeau'], 1 => (string) $a['corps']]);
+        $n['article']++;
     }
     return $n;
 }

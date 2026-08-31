@@ -19,6 +19,9 @@ function api_racine(): void
         'version' => '1',
         'langues' => cfg('langues'),
         'points' => [
+            'GET  /api/v1/portail',
+            'GET  /api/v1/articles?rubrique=&langue=&page=1',
+            'GET  /api/v1/articles/{slug}',
             'GET  /api/v1/forums',
             'GET  /api/v1/forums/{slug}',
             'GET  /api/v1/discussions/{slug}?page=1',
@@ -32,6 +35,96 @@ function api_racine(): void
         'note' => "Authentification par le cookie de session. Les ecritures exigent "
                 . "le jeton _csrf, comme les formulaires.",
     ]);
+}
+
+/* ------------------------------------------------------------------ */
+/* Portail                                                              */
+/* ------------------------------------------------------------------ */
+
+/** Un article, reduit a ce qu'une facade a besoin de savoir. */
+function article_json(array $a, bool $complet = false): array
+{
+    $o = [
+        'slug'      => $a['slug'],
+        'titre'     => $a['titre'],
+        'chapeau'   => $a['chapeau'],
+        'langue'    => $a['langue'],
+        'rubrique'  => $a['rubrique_slug'] ?? null,
+        'publie_le' => $a['publie_le'],
+        'signature' => $a['signature'] ?: ($a['auteur'] ?? null),
+        'ville'     => $a['ville_slug'] ?? null,
+        'pays'      => $a['pays_slug'] ?? null,
+        'image'     => !empty($a['media_une_id']) ? '/media/' . (int) $a['media_une_id'] : null,
+        'url'       => '/a/' . $a['slug'],
+    ];
+    if ($complet) {
+        // Le HTML servi est celui que NOUS avons fabrique a l'ecriture, pas
+        // le texte source : un consommateur de l'API n'a donc jamais a
+        // interpreter lui-meme la syntaxe de l'editeur.
+        $o['rendu'] = $a['rendu'];
+        $o['sources'] = array_map(fn($s) => [
+            'url' => $s['url'], 'titre' => $s['titre'], 'editeur' => $s['editeur'],
+        ], sources_de_article((int) $a['id']));
+    }
+    return $o;
+}
+
+function api_portail(): void
+{
+    $p = composer_portail();
+    json_out([
+        'nom' => cfg('nom_site'),
+        'nom_provisoire' => (bool) cfg('nom_provisoire'),
+        'mode_demo' => (bool) cfg('mode_demo'),
+        'une' => array_map(fn($a) => article_json($a), $p['une']),
+        'recents' => array_map(fn($a) => article_json($a), $p['recents']),
+        'rubriques' => array_map(fn($b) => [
+            'slug' => $b['rubrique']['slug'],
+            'nom' => champ_langue($b['rubrique']),
+            'total' => $b['total'],
+        ], $p['par_rubrique']),
+        'chiffres' => $p['stats'],
+    ]);
+}
+
+function api_articles(): void
+{
+    $page = max(1, (int) ($_GET['page'] ?? 1));
+    $pp = min(50, max(1, (int) ($_GET['limite'] ?? 20)));
+    $opts = ['limite' => $pp, 'depart' => ($page - 1) * $pp];
+    if (!empty($_GET['rubrique'])) {
+        $r = rubrique_par_slug((string) $_GET['rubrique']);
+        if (!$r) { json_out(['erreur' => 'rubrique inconnue', 'code' => 404], 404); return; }
+        $opts['rubrique_id'] = (int) $r['id'];
+    }
+    if (in_array($_GET['langue'] ?? '', cfg('langues'), true)) $opts['langue'] = $_GET['langue'];
+
+    $lignes = articles_publies($opts);
+    json_out([
+        'page' => $page,
+        'total' => compter_articles($opts),
+        'articles' => array_map(fn($a) => article_json($a), $lignes),
+    ]);
+}
+
+function api_article(string $slug): void
+{
+    // article_par_slug() sans le second argument : l'API n'a pas de mode
+    // apercu. Un brouillon repond 404 ici meme pour un redacteur connecte.
+    $a = article_par_slug($slug);
+    if (!$a) { json_out(['erreur' => t('err_404'), 'code' => 404], 404); return; }
+    $o = article_json($a, true);
+    $o['traductions'] = array_map(
+        fn($t) => ['langue' => $t['langue'], 'url' => '/a/' . $t['slug'], 'titre' => $t['titre']],
+        traductions_de($a['groupe'] ?? null, (int) $a['id']));
+    if (!empty($a['discussion_id'])) {
+        $d = qun('SELECT slug FROM discussions WHERE id = ? AND masquee = 0',
+                 [(int) $a['discussion_id']]);
+        $o['discussion'] = $d ? '/d/' . $d['slug'] : null;
+    } else {
+        $o['discussion'] = null;
+    }
+    json_out($o);
 }
 
 function api_forums(): void
@@ -109,7 +202,8 @@ function api_recherche(): void
     $q = trim((string) ($_GET['q'] ?? ''));
     if ($q === '') { json_out(['erreur' => 'parametre q requis', 'code' => 400], 400); return; }
     $r = recherche_executer($q, [
-        'espace' => ($_GET['espace'] ?? 'forum') === 'projets' ? 'projets' : 'forum',
+        'espace' => in_array($_GET['espace'] ?? '', ['forum', 'projets', 'portail'], true)
+                  ? $_GET['espace'] : 'forum',
         'tri' => in_array($_GET['tri'] ?? '', ['pertinence', 'date', 'activite'], true)
                ? $_GET['tri'] : 'pertinence',
         'limite' => min(50, max(1, (int) ($_GET['limite'] ?? 25))),

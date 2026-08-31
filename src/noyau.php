@@ -92,8 +92,28 @@ function h($s): string
     return htmlspecialchars((string) $s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
-/* Un slug qui garde l'arabe et les accents lisibles quand c'est possible,
- * et qui ne rend JAMAIS une chaine vide : une URL vide casse le routage. */
+/**
+ * Un slug ASCII, toujours, et qui ne rend JAMAIS une chaine vide.
+ *
+ * POURQUOI ASCII ET PAS « LES LETTRES UNICODE ».
+ *
+ * La premiere version gardait \p{L}, donc l'arabe et les accents. C'etait
+ * plus joli et c'etait faux : les motifs de la table de routage s'ecrivent
+ * `[\w\-]+`, et \w sans le drapeau /u ne couvre que l'ASCII. Un titre arabe
+ * produisait un slug que le routeur ne reconnaissait plus — la page
+ * repondait 404 alors que la ligne existait en base. Le meme piege attend
+ * un peu plus loin dans le sitemap, dans le flux et dans la canonique, ou
+ * une adresse non-ASCII doit etre encodee pour etre valable.
+ *
+ * La translitteration ne suffit pas non plus : « Any-Latin; Latin-ASCII »
+ * laisse passer des lettres modificatives comme « ʿ » (U+02BF) ou « ⁿ »
+ * (U+207F), qui ressemblent a de l'ASCII sans en etre. D'ou le filtre final
+ * sur [a-z0-9], sans exception.
+ *
+ * Un titre entierement non latin sur un serveur sans l'extension intl
+ * retombe donc sur « n-xxxxxxxx ». C'est une adresse laide et stable,
+ * preferable a une adresse elegante qui repond 404.
+ */
 function slug(string $s, int $max = 120): string
 {
     $s = trim($s);
@@ -102,9 +122,9 @@ function slug(string $s, int $max = 120): string
         if ($t !== false && $t !== '') $s = $t;
     }
     $s = mb_strtolower($s, 'UTF-8');
-    $s = preg_replace('/[^\p{L}\p{N}]+/u', '-', $s) ?? '';
+    $s = preg_replace('/[^a-z0-9]+/', '-', $s) ?? '';
     $s = trim($s, '-');
-    $s = mb_substr($s, 0, $max, 'UTF-8');
+    $s = trim(substr($s, 0, $max), '-');     // ASCII : substr() est sur ici
     return $s === '' ? 'n-' . substr(bin2hex(random_bytes(4)), 0, 8) : $s;
 }
 

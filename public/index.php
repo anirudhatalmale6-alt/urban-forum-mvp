@@ -31,6 +31,7 @@ require $src . '/notifications.php';
 require $src . '/moderation.php';
 require $src . '/medias.php';
 require $src . '/vue.php';
+require $src . '/portail.php';
 
 installe_gestion_erreurs();
 

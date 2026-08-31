@@ -35,6 +35,8 @@ require $racine . '/src/messages.php';
 require $racine . '/src/recherche.php';
 require $racine . '/src/notifications.php';
 require $racine . '/src/moderation.php';
+require $racine . '/src/vue.php';
+require $racine . '/src/portail.php';
 
 if (qval('SELECT COUNT(*) FROM roles') === null) {
     fwrite(STDERR, "Lance d'abord : php outils/installer.php\n");
@@ -309,6 +311,7 @@ $MEMBRES = [
     ['sara_m',   'membre',               'ar'],
     ['diego_r',  'membre',               'en'],
     ['nour_h',   'moderateur',           'ar'],
+    ['ines_l',   'redacteur',            'fr'],
 ];
 $uid = [];
 foreach ($MEMBRES as [$pseudo, $role, $lang]) {
@@ -524,6 +527,255 @@ $D[] = semer_discussion($forum_id['s-patrimoine'], 'sara_m', $uid,
 
 $D = array_values(array_filter($D));
 echo 'Discussions de demonstration : ' . count($D) . ".\n";
+
+/* ------------------------------------------------------------------ */
+/* 5 bis. Portail : rubriques et articles de demonstration             */
+/* ------------------------------------------------------------------ */
+
+/* Les RUBRIQUES sont une structure, pas du contenu : elles survivent a
+   purge-demo.php, comme la geographie et les forums. Une rubrique vide
+   affiche « aucun article pour l'instant », qui est l'etat normal d'un
+   portail neuf. */
+$RUBRIQUES = [
+    ['actualites', 'Actualités', 'News', 'أخبار', 10,
+     "Ce qui vient de sortir : décisions, annonces, mises en service.",
+     'What just happened: decisions, announcements, openings.',
+     'ما استجدّ: قرارات وإعلانات ومنشآت دخلت الخدمة.'],
+    ['projets', 'Projets', 'Projects', 'مشاريع', 20,
+     "Un projet, son état d'avancement et les sources qui le documentent.",
+     'A project, its stage, and the sources that document it.',
+     'مشروع وحالة تقدّمه والمصادر التي توثّقه.'],
+    ['mobilite', 'Mobilité et transports', 'Mobility and transport', 'التنقّل والنقل', 30,
+     "Réseaux, lignes, gares, et ce qu'ils changent pour la ville.",
+     'Networks, lines, stations, and what they change for the city.',
+     'الشبكات والخطوط والمحطّات وما تغيّره في المدينة.'],
+    ['patrimoine', 'Patrimoine et paysage urbain', 'Heritage and urban landscape',
+     'التراث والمشهد العمراني', 40,
+     "Ce qui existait avant, et ce qu'on en fait.",
+     'What was there before, and what is being done with it.',
+     'ما كان قائمًا من قبل، وما يُفعل به.'],
+    ['logement', 'Logement et densité', 'Housing and density', 'السكن والكثافة', 50,
+     "Où l'on construit, combien, et pour qui.",
+     'Where building happens, how much, and for whom.',
+     'أين يُبنى وبأي حجم ولمن.'],
+    ['chantiers', 'Chantiers', 'Construction sites', 'أوراش البناء', 60,
+     "L'avancement vu du sol, mois après mois.",
+     'Progress seen from the ground, month after month.',
+     'التقدّم كما يُرى من الأرض، شهرًا بعد شهر.'],
+    ['debats', 'Débats', 'Debates', 'نقاشات', 70,
+     "Les désaccords qui valent d'être posés à plat.",
+     'The disagreements worth laying out in full.',
+     'الخلافات التي تستحق أن تُعرض كاملة.'],
+];
+$rub_id = [];
+foreach ($RUBRIQUES as [$slug, $fr, $en, $ar, $rang, $dfr, $den, $dar]) {
+    $rub_id[$slug] = ins_si_absent('rubriques', ['slug' => $slug], [
+        'nom_fr' => $fr, 'nom_en' => $en, 'nom_ar' => $ar, 'rang' => $rang,
+        'description_fr' => $dfr, 'description_en' => $den, 'description_ar' => $dar,
+        'demo' => 0,
+    ]);
+}
+echo 'Rubriques : ' . count($rub_id) . ".\n";
+
+/*
+ * ARTICLES DE DEMONSTRATION.
+ *
+ * AUCUN N'AFFIRME UN FAIT SUR UN PROJET REEL. Pas un budget, pas une
+ * hauteur, pas une date de livraison, pas un nom de maitre d'ouvrage. Ils
+ * parlent du portail lui-meme : ce qu'il publie, comment on y ecrit,
+ * pourquoi une fiche reste vide sans source.
+ *
+ * La raison est la meme que pour les discussions de demonstration : une
+ * phrase ecrite pour meubler une maquette se retrouve indexee, citee, puis
+ * reprise ailleurs comme si quelqu'un l'avait verifiee. Un article de
+ * portail a une signature et une date — il a exactement l'apparence d'une
+ * information verifiee.
+ *
+ * Et ils ne citent AUCUNE source, volontairement : c'est ce qui rend
+ * visible la mention « cet article ne cite aucune source » sur la page. Une
+ * source inventee pour faire joli serait le defaut meme que cette mention
+ * existe pour signaler.
+ */
+function semer_article(array $uid, array $rub_id, string $auteur, string $langue,
+                       ?string $rubrique, string $titre, string $chapeau, string $corps,
+                       array $opts = []): ?int
+{
+    if (qval('SELECT id FROM articles WHERE titre = ? AND langue = ?', [$titre, $langue]) !== null) {
+        return null;                                   // deja seme
+    }
+    $id = enregistrer_article(null, [
+        'titre' => $titre, 'chapeau' => $chapeau, 'corps' => $corps,
+        'langue' => $langue,
+        'rubrique_id' => $rubrique ? $rub_id[$rubrique] : null,
+        'signature' => $opts['signature'] ?? '',
+        'statut' => $opts['statut'] ?? 'publie',
+        'une' => $opts['une'] ?? false,
+        'rang_une' => $opts['rang_une'] ?? 100,
+        'publie_le' => $opts['publie_le'] ?? gmdate('Y-m-d H:i:s', time() - random_int(1, 25) * 86400),
+        'groupe' => $opts['groupe'] ?? '',
+        'demo' => 1,
+    ], $uid[$auteur]);
+    // Aucun article de demonstration n'est rattache a une ville : un texte
+    // qui explique le fonctionnement du portail n'a pas a apparaitre dans la
+    // page d'une ville reelle comme s'il parlait d'elle. Le rattachement
+    // geographique existe dans le formulaire de redaction et il est verifie
+    // par la suite de controle, pas peuple ici.
+    return $id;
+}
+
+$groupe_charte = bin2hex(random_bytes(8));
+
+$A = [];
+$A[] = semer_article($uid, $rub_id, 'ines_l', 'fr', 'debats',
+    "Ce que ce portail publie, et ce qu'il ne publie pas",
+    "Une règle simple : un chiffre sans source ne s'écrit pas. Ni ici, ni dans une fiche projet, ni dans un titre.",
+    "Un portail urbain vit de chiffres : une hauteur, un budget, un nombre de logements, "
+  . "une date de mise en service. Ce sont les phrases les plus reprises, et ce sont "
+  . "exactement celles qui se propagent le plus vite quand elles sont fausses.\n\n"
+  . "La règle de ce site tient en une ligne :\n\n"
+  . "- un fait vient d'une source, ou il n'est pas écrit ;\n"
+  . "- une estimation est présentée comme une estimation ;\n"
+  . "- une rumeur porte le mot rumeur, ou elle attend.\n\n"
+  . "**Concrètement.** Chaque article a un bloc *Sources* sous le texte. S'il est vide, "
+  . "la page l'écrit : « cet article ne cite aucune source ». La mention est là pour se "
+  . "voir. Un texte sans source doit ressembler à un texte sans source, pas à une "
+  . "information vérifiée.\n\n"
+  . "> Le jour où un chiffre non sourcé passe en page d'accueil, il devient la référence "
+  . "de quelqu'un d'autre. C'est le moment où l'on cesse de pouvoir le corriger.\n\n"
+  . "Cela vaut aussi pour ce que le portail *ne reprend pas* : le nom, les textes, "
+  . "l'interface ou les données d'un autre forum. On construit les mêmes fonctions, "
+  . "on n'emprunte pas l'identité.",
+    ['une' => true, 'rang_une' => 1, 'signature' => 'La rédaction', 'groupe' => $groupe_charte]);
+
+$A[] = semer_article($uid, $rub_id, 'kenji_t', 'en', 'debats',
+    'What this portal publishes, and what it does not',
+    "One rule: a figure without a source does not get written. Not here, not in a project record, not in a headline.",
+    "An urban portal runs on figures: a height, a budget, a number of homes, an opening "
+  . "date. Those are the most quoted sentences on any such site, and they are exactly the "
+  . "ones that travel fastest when they are wrong.\n\n"
+  . "The rule here fits on one line:\n\n"
+  . "- a fact comes from a source, or it is not written;\n"
+  . "- an estimate is labelled as an estimate;\n"
+  . "- a rumour carries the word rumour, or it waits.\n\n"
+  . "**In practice.** Every article has a *Sources* block under the text. If it is empty, "
+  . "the page says so: \"this article cites no source\". That notice exists to be seen. "
+  . "A text without sources should look like a text without sources, not like verified "
+  . "information.\n\n"
+  . "> The day an unsourced figure reaches the front page, it becomes someone else's "
+  . "reference. That is the moment it stops being correctable.\n\n"
+  . "The same applies to what the portal does *not* borrow: the name, texts, interface or "
+  . "data of another forum. We build the same functions; we do not take the identity.",
+    ['signature' => 'The editors', 'groupe' => $groupe_charte]);
+
+$A[] = semer_article($uid, $rub_id, 'sara_m', 'ar', 'debats',
+    'ما تنشره هذه البوّابة وما لا تنشره',
+    'قاعدة واحدة: رقم بلا مصدر لا يُكتب. لا هنا، ولا في بطاقة مشروع، ولا في عنوان.',
+    "تعيش أي بوّابة عمرانية على الأرقام: ارتفاع، ميزانية، عدد مساكن، تاريخ دخول الخدمة. "
+  . "وهي أكثر الجمل اقتباسًا، وأسرعها انتشارًا حين تكون خاطئة.\n\n"
+  . "القاعدة هنا تختصر في سطر:\n\n"
+  . "- الواقعة تأتي من مصدر، أو لا تُكتب؛\n"
+  . "- التقدير يُعرض بوصفه تقديرًا؛\n"
+  . "- الإشاعة تحمل كلمة إشاعة، أو تنتظر.\n\n"
+  . "**عمليًا.** لكل مقال كتلة *المصادر* تحت النص. وإن كانت فارغة قالت الصفحة ذلك: "
+  . "«لا يستند هذا المقال إلى أي مصدر». هذا التنبيه موجود ليُرى. النص بلا مصادر يجب أن "
+  . "يبدو نصًا بلا مصادر، لا معلومة موثّقة.\n\n"
+  . "> يوم يصل رقم بلا مصدر إلى الصفحة الأولى يصير مرجعًا لغيرنا. عندها يتوقّف عن كونه "
+  . "قابلًا للتصحيح.",
+    ['signature' => 'هيئة التحرير', 'groupe' => $groupe_charte]);
+
+$A[] = semer_article($uid, $rub_id, 'ines_l', 'fr', 'actualites',
+    "Comment proposer un article",
+    "Le portail est ouvert aux contributions. Voici ce qu'on attend d'un texte avant de le publier.",
+    "Écrire ici ne demande pas d'être journaliste. Cela demande trois choses.\n\n"
+  . "**Un titre qui dit ce qui s'est passé.** Pas une question, pas une accroche. "
+  . "Un lecteur doit savoir de quoi il s'agit sans ouvrir.\n\n"
+  . "**Un chapeau de deux ou trois phrases.** C'est ce qui s'affiche en liste, dans le "
+  . "flux et dans les résultats de recherche. Laissé vide, il est repris du début du "
+  . "texte, ce qui donne rarement un bon résumé.\n\n"
+  . "**Au moins une source, avec son éditeur et sa date.** Un communiqué, un document "
+  . "d'urbanisme, un compte rendu de séance, un article de presse. Une capture d'écran "
+  . "sans adresse n'est pas une source.\n\n"
+  . "L'article se rattache ensuite à une ville. Le pays et le continent en sont déduits "
+  . "automatiquement — c'est ce rattachement qui fait apparaître le texte sur la page de "
+  . "la ville, et qui choisit le forum où s'ouvrira la discussion.",
+    ['une' => true, 'rang_une' => 2, 'signature' => 'La rédaction']);
+
+$A[] = semer_article($uid, $rub_id, 'lucas_v', 'fr', 'projets',
+    "Pourquoi une fiche projet peut rester vide",
+    "Les champs budget, hauteur et date de livraison existent déjà. Ils sont vides, et c'est volontaire.",
+    "La base contient tout ce qu'il faut pour décrire un projet : nom officiel et nom "
+  . "d'usage, statut, coordonnées, budget, hauteur, surface, date de livraison prévue, "
+  . "intervenants, sources.\n\n"
+  . "Ces champs sont vides pour l'instant. Les remplir avec des valeurs plausibles pour "
+  . "que la maquette « ait l'air complète » reviendrait à publier des chiffres que "
+  . "personne n'a vérifiés, sous une mise en page qui leur donnerait l'autorité d'une "
+  . "fiche technique.\n\n"
+  . "Chaque champ porte donc son *niveau d'information* : vérifié, estimation, rumeur. "
+  . "Une fiche à moitié remplie et honnête est plus utile qu'une fiche complète et fausse "
+  . "— surtout parce que la seconde ne se corrige jamais : personne ne va vérifier ce qui "
+  . "a déjà l'air sûr.",
+    ['signature' => 'Lucas V.']);
+
+$A[] = semer_article($uid, $rub_id, 'kenji_t', 'en', 'mobilite',
+    'Reading a project record: status, sources, level of information',
+    'Three fields decide how much weight a record deserves. They are the first three to read.',
+    "A project record here carries a **status** (proposed, approved, tender, under "
+  . "construction, on hold, completed, cancelled), a **level of information** (verified, "
+  . "estimate, rumour) and a list of **sources**.\n\n"
+  . "Read them in that order, before the figures.\n\n"
+  . "A record marked *rumour* with no source is not a weaker version of a verified "
+  . "record — it is a different kind of object. It says: someone reported this, nobody "
+  . "has confirmed it. Keeping the two visually distinct is the whole point of having "
+  . "the field at all.\n\n"
+  . "When a figure changes, the previous value is not overwritten in silence: the change "
+  . "is kept, with its source and its date. That history is what lets a reader see "
+  . "whether a project has been slipping for three years.",
+    ['signature' => 'Kenji T.']);
+
+$A[] = semer_article($uid, $rub_id, 'nour_h', 'ar', 'patrimoine',
+    'كيف نصف مكانًا دون أن ندّعي معرفته',
+    'وصف حيّ قديم أسهل ما يُكتب وأسرع ما يُخطئ. بعض القواعد العملية.',
+    "أسهل ما يُكتب عن حيّ قديم هو ما يبدو بديهيًا: تاريخ البناء، اسم المعماري، سبب الهدم. "
+  . "وهذه بالضبط أكثر المعلومات تداولًا بلا سند.\n\n"
+  . "ثلاث قواعد تكفي غالبًا:\n\n"
+  . "- اكتب ما تراه، وميّزه عمّا قرأته؛\n"
+  . "- إن كان التاريخ محلّ خلاف، فاذكر الخلاف بدل أن تختار؛\n"
+  . "- الصورة ليست مصدرًا لتاريخ، بل لحالة المكان يوم التقاطها.\n\n"
+  . "لا يعني هذا الامتناع عن الكتابة. يعني أن يعرف القارئ، في كل جملة، من أين جاءت.",
+    ['signature' => 'نور ح.']);
+
+// Un brouillon et un article PROGRAMME : les deux etats doivent exister
+// quelque part, sinon rien ne prouve qu'ils se comportent differemment d'un
+// article en ligne. Le programme est date dans le FUTUR — il ne doit
+// apparaitre ni sur le portail, ni dans le flux, ni dans le sitemap, ni
+// dans la recherche, et son adresse directe doit repondre 404 au public.
+$A[] = semer_article($uid, $rub_id, 'ines_l', 'fr', 'chantiers',
+    "Brouillon de démonstration",
+    "Ce texte est enregistré mais pas publié. Il ne doit apparaître nulle part côté public.",
+    "Un brouillon sert à vérifier une chose précise : qu'il ne fuit pas.\n\n"
+  . "Il ne figure pas sur le portail, pas dans le flux RSS, pas dans le sitemap, pas dans "
+  . "la recherche. Son adresse directe répond 404 à un visiteur, et affiche un bandeau "
+  . "d'aperçu à un rédacteur connecté.",
+    ['statut' => 'brouillon']);
+
+$A[] = semer_article($uid, $rub_id, 'ines_l', 'fr', 'chantiers',
+    "Article programmé de démonstration",
+    "Publié, mais daté dans le futur. Invisible jusqu'à l'heure dite, y compris par son adresse directe.",
+    "La date de publication est relue **à chaque affichage**, pas une seule fois au "
+  . "moment de l'enregistrement. Un article daté de la semaine prochaine est donc "
+  . "invisible aujourd'hui pour tout le monde, y compris pour qui devinerait son adresse.\n\n"
+  . "C'est la différence entre une date décorative et une date qui compte.",
+    ['statut' => 'publie', 'publie_le' => gmdate('Y-m-d H:i:s', time() + 7 * 86400)]);
+
+$A = array_values(array_filter($A));
+echo 'Articles de demonstration : ' . count($A) . ".\n";
+
+// Une discussion ouverte depuis un article, pour que le lien portail -> forum
+// se voie. Elle porte demo = 1 parce que l'article la porte.
+$prem = qval('SELECT id FROM articles WHERE statut = ? AND une = 1 ORDER BY rang_une LIMIT 1', ['publie']);
+if ($prem !== null && qval('SELECT discussion_id FROM articles WHERE id = ?', [(int) $prem]) === null) {
+    discussion_de_article((int) $prem, $uid['ines_l']);
+}
 
 /* ------------------------------------------------------------------ */
 /* 6. Etats qui rendent la demonstration realiste                      */

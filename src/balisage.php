@@ -74,6 +74,15 @@ function rendre_message(string $corps, array $opts = []): string
     //    javascript: et data: ne franchissent pas ce filtre.
     $s = preg_replace_callback('/\[([^\]\n]{1,120})\]\((https?:\/\/[^\s)]{1,500})\)/i',
         fn($m) => lien_html($m[2], $m[1]), $s) ?? $s;
+    // Liens INTERNES en chemin absolu : [texte](/a/mon-article). Sans cette
+    // regle, un lien vers une page du site reste du texte brut tant que
+    // cfg('domaine') est vide — c'est-a-dire pendant toute l'installation.
+    // Le motif exige une seule barre suivie d'autre chose qu'une barre :
+    // « //evil.example » est une URL absolue de protocole relatif, pas un
+    // chemin interne, et il ne doit pas franchir ce filtre.
+    $s = preg_replace_callback('#\[([^\]\n]{1,120})\]\((/[^/\s)][^\s)]{0,200})\)#',
+        fn($m) => '<a href="' . h(html_entity_decode($m[2], ENT_QUOTES, 'UTF-8')) . '">'
+                . $m[1] . '</a>', $s) ?? $s;
     $s = preg_replace_callback('#(?<![">=])\b(https?://[^\s<]{4,500})#i',
         fn($m) => lien_html($m[1], $m[1]), $s) ?? $s;
 

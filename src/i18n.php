@@ -71,6 +71,32 @@ function t(string $cle, array $vars = []): string
     return $s;
 }
 
+/**
+ * Forme du pluriel : 'un' ou 'autre'.
+ *
+ * Le francais met au singulier a ZERO comme a un (« 0 article »), l'anglais
+ * non (« 0 articles »). Sans cette distinction, une des deux langues ecrit
+ * une faute a chaque compteur de la page.
+ *
+ * L'arabe a six formes (zero, un, deux, few, many, other). On n'en gere ici
+ * que deux : c'est une SIMPLIFICATION assumee, pas un oubli. Le jour ou les
+ * compteurs comptent vraiment, il faudra les six — et il faudra un
+ * relecteur arabophone pour les ecrire, ce que je ne suis pas.
+ */
+function pluriel(int $n): string
+{
+    return match (langue()) {
+        'fr'    => $n <= 1 ? 'un' : 'autre',
+        default => $n === 1 ? 'un' : 'autre',
+    };
+}
+
+/** t() avec choix automatique de la forme : tn('portail_n_articles', 3). */
+function tn(string $cle, int $n, array $vars = []): string
+{
+    return t($cle . '_' . pluriel($n), $vars + ['n' => nombre($n)]);
+}
+
 /** Choisit le champ traduit d'une ligne : nom_fr / nom_en / nom_ar. */
 function champ_langue(array $ligne, string $prefixe = 'nom'): string
 {

@@ -11,6 +11,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/public.php';
+require __DIR__ . '/portail.php';
 require __DIR__ . '/compte.php';
 require __DIR__ . '/ecrire.php';
 require __DIR__ . '/mod.php';
@@ -22,7 +23,16 @@ function routes(): array
 {
     return [
         // chemin (regex)                methode  fonction              permission
-        ['#^/$#',                        'GET',  'page_accueil',        'forum.lire'],
+        // La racine sert le PORTAIL. L'ancienne page d'accueil du forum
+        // (tendances, monde, villes, chiffres) n'a pas disparu : elle vit a
+        // /communaute et reste liee depuis le portail et le pied de page.
+        ['#^/$#',                        'GET',  'page_portail',        'forum.lire'],
+        ['#^/actualites$#',              'GET',  'page_actualites',     'forum.lire'],
+        ['#^/r/([\w\-]+)$#',             'GET',  'page_rubrique',       'forum.lire'],
+        ['#^/a/([\w\-]+)$#',             'GET',  'page_article',        'forum.lire'],
+        ['#^/portail/discussion$#',      'POST', 'post_article_discussion', 'forum.publier'],
+        ['#^/flux\.xml$#',               'GET',  'flux_rss',            'forum.lire'],
+        ['#^/communaute$#',              'GET',  'page_accueil',        'forum.lire'],
         ['#^/forums$#',                  'GET',  'page_forums',         'forum.lire'],
         ['#^/f/([\w\-]+)$#',             'GET',  'page_forum',          'forum.lire'],
         ['#^/d/([\w\-]+)$#',             'GET',  'page_discussion',     'forum.lire'],
@@ -67,6 +77,15 @@ function routes(): array
         ['#^/moderation/action$#',       'POST', 'post_action_mod',     'moderation.contenu'],
         ['#^/moderation/journal$#',      'GET',  'page_journal_mod',    'moderation.file'],
 
+        // Redaction du portail. « nouveau » passe AVANT le motif numerique :
+        // les deux ne se recouvrent pas ici, mais l'ordre reste celui du plus
+        // specifique au plus general, comme le reste de la table.
+        ['#^/admin/articles$#',          'GET',  'page_articles_admin', 'portail.rediger'],
+        ['#^/admin/articles/nouveau$#',  'GET',  'page_article_edition','portail.rediger'],
+        ['#^/admin/articles/(\d+)$#',    'GET',  'page_article_edition','portail.rediger'],
+        ['#^/admin/articles$#',          'POST', 'post_article_edition','portail.rediger'],
+        ['#^/admin/articles/source$#',   'POST', 'post_article_supprimer_source', 'portail.rediger'],
+
         ['#^/admin$#',                   'GET',  'page_admin',          'admin.statistiques'],
         ['#^/admin/taxonomie$#',         'GET',  'page_taxonomie',      'admin.taxonomie'],
         ['#^/admin/taxonomie$#',         'POST', 'post_taxonomie',      'admin.taxonomie'],
@@ -76,6 +95,9 @@ function routes(): array
         ['#^/admin/export\.csv$#',       'GET',  'export_csv',          'admin.statistiques'],
         ['#^/admin/reindexer$#',         'POST', 'post_reindexer',      'admin.configuration'],
 
+        ['#^/api/v1/portail$#',          'GET',  'api_portail',         'forum.lire'],
+        ['#^/api/v1/articles$#',         'GET',  'api_articles',        'forum.lire'],
+        ['#^/api/v1/articles/([\w\-]+)$#', 'GET', 'api_article',        'forum.lire'],
         ['#^/api/v1/forums$#',           'GET',  'api_forums',          'forum.lire'],
         ['#^/api/v1/forums/([\w\-]+)$#', 'GET',  'api_forum',           'forum.lire'],
         ['#^/api/v1/discussions/([\w\-]+)$#', 'GET', 'api_discussion',  'forum.lire'],

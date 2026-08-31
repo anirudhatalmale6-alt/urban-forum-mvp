@@ -86,6 +86,46 @@ foreach ([
     }
 }
 
+/* --- 3 bis. Reparation des adresses non-ASCII ------------------------ */
+/*
+ * Les motifs de la table de routage s'ecrivent `[\w\-]+`, et \w sans le
+ * drapeau /u ne couvre que l'ASCII. Une adresse qui contient une lettre non
+ * latine n'est donc jamais reconnue : la page repond 404 alors que la ligne
+ * existe en base.
+ *
+ * slug() produit desormais de l'ASCII pur (voir src/noyau.php), mais les
+ * lignes ecrites AVANT ce correctif gardent leur ancienne adresse. Cette
+ * etape les reecrit, une seule fois. Elle est ici et pas dans une migration
+ * separee parce que l'installeur est le seul script qui sera rejoue a coup
+ * sur apres une mise a jour.
+ *
+ * La translitteration laisse passer des lettres modificatives — « ʿ »
+ * (U+02BF), « ⁿ » (U+207F) — qui ressemblent a de l'ASCII sans en etre.
+ * C'est exactement ce qui avait produit une discussion arabe inatteignable.
+ */
+$repares = 0;
+foreach (['articles' => 'titre', 'discussions' => 'titre', 'forums' => 'titre_fr',
+          'rubriques' => 'nom_fr', 'villes' => 'nom_fr', 'pays' => 'nom_fr',
+          'continents' => 'nom_fr'] as $table => $col_titre) {
+    try {
+        $lignes = qtous("SELECT id, slug, `$col_titre` AS titre FROM `$table`");
+    } catch (PDOException) {
+        continue;                       // table absente sur une base ancienne
+    }
+    foreach ($lignes as $r) {
+        if (preg_match('/^[a-z0-9-]+$/', (string) $r['slug'])) continue;
+        $neuf = slug_unique($table, slug((string) ($r['titre'] ?: $r['slug'])));
+        maj($table, (int) $r['id'], ['slug' => $neuf]);
+        echo "  adresse reecrite : $table#{$r['id']} -> /$neuf\n";
+        $repares++;
+    }
+}
+if ($repares) {
+    echo "Adresses non-ASCII reparees : $repares\n";
+    echo "  Les anciennes adresses ne repondaient pas ; il n'y a donc aucun\n";
+    echo "  lien a rediriger, seulement des 404 qui disparaissent.\n";
+}
+
 /* --- 4. Synonymes de recherche (administrables ensuite) -------------- */
 foreach ([
     ['metro', 'subway'], ['subway', 'metro'], ['tramway', 'tram'], ['tram', 'tramway'],

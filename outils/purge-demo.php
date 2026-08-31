@@ -29,6 +29,7 @@ require $racine . '/src/balisage.php';
 require $racine . '/src/messages.php';
 require $racine . '/src/recherche.php';
 require $racine . '/src/moderation.php';
+require $racine . '/src/portail.php';
 
 $supprimer = in_array('--supprimer', $argv, true);
 
@@ -36,6 +37,19 @@ $discussions = array_column(qtous('SELECT id FROM discussions WHERE demo = 1'), 
 $messages    = array_column(qtous('SELECT id FROM messages WHERE demo = 1'), 'id');
 $membres     = array_column(qtous('SELECT id FROM utilisateurs WHERE demo = 1'), 'id');
 $medias      = qtous('SELECT id, nom_fichier FROM medias WHERE demo = 1');
+$articles    = array_column(qtous('SELECT id FROM articles WHERE demo = 1'), 'id');
+$articles    = array_map('intval', $articles);
+
+// La discussion ouverte par un article de demonstration part avec lui, meme
+// si elle n'etait pas marquee : sans cela le forum garde une discussion qui
+// pointe vers un article supprime.
+if ($articles) {
+    $ph = implode(',', array_fill(0, count($articles), '?'));
+    foreach (qtous("SELECT discussion_id FROM articles
+                    WHERE id IN ($ph) AND discussion_id IS NOT NULL", $articles) as $r) {
+        $discussions[] = (int) $r['discussion_id'];
+    }
+}
 
 // Les messages ecrits par un membre de demonstration dans une discussion
 // reelle comptent aussi : sinon la purge laisse des orphelins qui affichent
@@ -57,6 +71,7 @@ printf("  membres      %d\n", count($membres));
 printf("  discussions  %d\n", count($discussions));
 printf("  messages     %d\n", count($messages));
 printf("  medias       %d\n", count($medias));
+printf("  articles     %d\n", count($articles));
 
 if (!$supprimer) {
     echo "\nRien n'a ete supprime. Relance avec --supprimer pour le faire.\n";
@@ -100,6 +115,17 @@ if ($medias) {
     [$ph, $p] = $dans(array_map('intval', array_column($medias, 'id')));
     q("DELETE FROM medias WHERE id IN ($ph)", $p);
 }
+if ($articles) {
+    [$ph, $p] = $dans($articles);
+    q("DELETE FROM vues_article WHERE article_id IN ($ph)", $p);
+    q("DELETE FROM sources WHERE objet_type = 'article' AND objet_id IN ($ph)", $p);
+    q("DELETE FROM index_recherche WHERE objet_type = 'article' AND objet_id IN ($ph)", $p);
+    q("DELETE FROM articles WHERE id IN ($ph)", $p);
+}
+// Les RUBRIQUES restent, comme la geographie et les forums : ce sont des
+// structures editoriales, pas du contenu de remplissage. Une rubrique vide
+// affiche « aucun article pour l'instant », ce qui est l'etat normal d'un
+// portail neuf.
 if ($membres) {
     [$ph, $p] = $dans($membres);
     q("DELETE FROM sessions WHERE utilisateur_id IN ($ph)", $p);
@@ -126,7 +152,8 @@ $n = reindexer_tout();
 $restant = (int) qval('SELECT COUNT(*) FROM discussions WHERE demo = 1')
          + (int) qval('SELECT COUNT(*) FROM messages WHERE demo = 1')
          + (int) qval('SELECT COUNT(*) FROM utilisateurs WHERE demo = 1')
-         + (int) qval('SELECT COUNT(*) FROM medias WHERE demo = 1');
+         + (int) qval('SELECT COUNT(*) FROM medias WHERE demo = 1')
+         + (int) qval('SELECT COUNT(*) FROM articles WHERE demo = 1');
 
 echo "\nPurge effectuee. Lignes marquees demo restantes : $restant\n";
 echo 'Index reconstruit : ' . array_sum($n) . " objets.\n";

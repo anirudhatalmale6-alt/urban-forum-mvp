@@ -359,6 +359,64 @@ function schema_tables(): array
             'index' => [['objet_type', 'objet_id']],
         ],
 
+        // ---------- Portail editorial --------------------------------------
+        // Le portail est la couche PUBLIQUE qui se met devant le forum : on
+        // y lit sans compte, on y entre par rubrique ou par ville, et chaque
+        // article peut ouvrir sa discussion dans le forum correspondant.
+        //
+        // UN ARTICLE EST ECRIT DANS UNE LANGUE, PAS DANS TROIS. La colonne
+        // `groupe` relie les versions d'un meme sujet ; `langue` dit dans
+        // laquelle celle-ci est ecrite. C'est volontaire : trois colonnes
+        // titre_fr / titre_en / titre_ar obligeraient a inventer une
+        // traduction pour pouvoir enregistrer, et une traduction inventee
+        // est un texte que personne n'a relu. Ici l'article existe en
+        // francais seul, et la page affiche « aussi disponible en … » quand
+        // une version existe vraiment.
+        'rubriques' => [
+            'cols' => [
+                'id' => 'pk', 'slug' => 'str:80',
+                'nom_fr' => 'str:120', 'nom_en' => 'str:120', 'nom_ar' => 'str:120',
+                'description_fr' => 'text', 'description_en' => 'text', 'description_ar' => 'text',
+                'rang' => 'int', 'demo' => 'bool',
+            ],
+            'uniques' => [['slug']],
+        ],
+        'articles' => [
+            'cols' => [
+                'id' => 'pk',
+                'groupe' => 'str:40',        // relie les versions linguistiques
+                'langue' => 'str:5',
+                'slug' => 'str:190',
+                'rubrique_id' => 'int',
+                'titre' => 'str:255',
+                'chapeau' => 'text',          // le resume affiche en liste
+                'corps' => 'text',            // source, syntaxe de l'editeur
+                'rendu' => 'text',            // HTML assaini, calcule a l'ecriture
+                'auteur_id' => 'int',
+                'signature' => 'str:190',     // signature affichee si differente du compte
+                'continent_id' => 'int', 'pays_id' => 'int', 'ville_id' => 'int',
+                'projet_id' => 'int',
+                'media_une_id' => 'int',
+                'statut' => 'str:20',         // brouillon | publie | retire
+                'une' => 'bool',              // remonte en tete de portail
+                'rang_une' => 'int',
+                'publie_le' => 'ts', 'cree_le' => 'ts', 'maj_le' => 'ts',
+                'nb_vues' => 'int',
+                'discussion_id' => 'int',     // la discussion ouverte sur l'article
+                'demo' => 'bool',
+            ],
+            'uniques' => [['slug']],
+            'index'   => [['rubrique_id'], ['statut', 'publie_le'], ['groupe'],
+                          ['ville_id'], ['pays_id'], ['langue']],
+        ],
+        'vues_article' => [
+            // Meme deduplication que pour les discussions : une empreinte par
+            // jour. Sans cela un rechargement de page « fabrique » de
+            // l'audience, et l'audience sert a classer le portail.
+            'cols' => ['id' => 'pk', 'article_id' => 'int', 'empreinte' => 'str:64', 'jour' => 'str:10'],
+            'uniques' => [['article_id', 'empreinte', 'jour']],
+        ],
+
         // ---------- Badges (section 4.5) -----------------------------------
         'badges' => [
             'cols' => ['id' => 'pk', 'cle' => 'str:60', 'nom_fr' => 'str:120',

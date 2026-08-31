@@ -37,8 +37,24 @@ function sitemap(): void
     };
 
     $ecrire('/', null, 'daily', '1.0');
+    $ecrire('/actualites', null, 'daily', '0.9');
+    $ecrire('/communaute', null, 'daily', '0.8');
     $ecrire('/forums', null, 'daily', '0.9');
     $ecrire('/villes', null, 'weekly', '0.7');
+
+    foreach (qtous('SELECT slug FROM rubriques ORDER BY rang, id') as $r) {
+        $ecrire('/r/' . $r['slug'], null, 'daily', '0.7');
+    }
+    // Meme regle que pour les discussions masquees : seuls les articles
+    // REELLEMENT en ligne sont listes. Un article programme pour vendredi
+    // repondrait 404 aujourd'hui, et un sitemap qui pointe vers des 404 fait
+    // baisser la confiance accordee au fichier entier.
+    foreach (qtous('SELECT slug, publie_le, maj_le FROM articles
+                    WHERE statut = ? AND publie_le IS NOT NULL AND publie_le <= ?
+                    ORDER BY publie_le DESC LIMIT 20000',
+                   ['publie', maintenant()]) as $r) {
+        $ecrire('/a/' . $r['slug'], $r['maj_le'] ?: $r['publie_le'], 'monthly', '0.8');
+    }
 
     foreach (qtous('SELECT slug FROM continents ORDER BY rang') as $r) $ecrire('/continent/' . $r['slug']);
     foreach (qtous('SELECT slug FROM pays ORDER BY id') as $r)          $ecrire('/pays/' . $r['slug']);
@@ -69,6 +85,7 @@ function robots(): void
     if (cfg('domaine')) {
         $lignes[] = '';
         $lignes[] = 'Sitemap: ' . url('/sitemap.xml');
+        $lignes[] = '# Flux du portail : ' . url('/flux.xml');
     } else {
         $lignes[] = '';
         $lignes[] = '# Sitemap absent : le domaine du site n\'est pas encore renseigne.';

@@ -81,9 +81,11 @@ verif("compteurs de limitation remis a zero avant la suite", code == 0,
 
 anon = requests.Session()
 pages_publiques = [
-    "/", "/forums", "/villes", "/projets", "/aide",
+    "/", "/actualites", "/communaute", "/r/debats",
+    "/forums", "/villes", "/projets", "/aide",
     "/continent/europe", "/pays/france", "/v/paris", "/f/c-afrique",
     "/f/s-transport", "/robots.txt", "/api/v1", "/api/v1/forums",
+    "/api/v1/portail", "/api/v1/articles",
 ]
 for p in pages_publiques:
     r = anon.get(BASE + p)
@@ -96,7 +98,15 @@ verif("/forums liste des forums", n_forums >= 10, "%d liens de forum" % n_forums
 
 r = anon.get(BASE + "/")
 n_disc = len(re.findall(r'href="/d/', r.text))
-verif("accueil liste des discussions", n_disc >= 5, "%d liens de discussion" % n_disc)
+verif("le portail montre des discussions du forum", n_disc >= 5,
+      "%d liens de discussion" % n_disc)
+n_art = len(set(re.findall(r'href="(/a/[a-z0-9-]+)"', r.text)))
+verif("le portail montre des articles", n_art >= 3, "%d articles distincts" % n_art)
+
+r = anon.get(BASE + "/communaute")
+n_disc_c = len(re.findall(r'href="/d/', r.text))
+verif("/communaute garde la page d'accueil du forum", n_disc_c >= 5,
+      "%d liens de discussion" % n_disc_c)
 
 r = anon.get(BASE + "/villes")
 n_villes = len(re.findall(r'href="/v/', r.text))
@@ -540,7 +550,297 @@ if os.path.isfile(fichier_jour):
           str([l.get("message") for l in lignes[-3:]])[:140])
 
 # ======================================================================
-titre("11. Rendu reel dans un navigateur : contraste, debordement, JS")
+titre("11. Le portail editorial")
+# ======================================================================
+
+code, sortie = php(os.path.join("tests", "portail.php"), "compte")
+pt = json.loads(sortie.strip().splitlines()[-1])
+verif("le portail a des rubriques", pt["rubriques"] >= 5, "%d rubriques" % pt["rubriques"])
+verif("le portail a des articles publies", pt["visibles"] >= 5,
+      "%d visibles sur %d" % (pt["visibles"], pt["total"]))
+verif("il existe un brouillon et un article programme a eprouver",
+      pt["brouillons"] >= 1 and pt["programmes"] >= 1,
+      "brouillons=%d programmes=%d" % (pt["brouillons"], pt["programmes"]))
+# L'index ne doit contenir QUE le visible. Un brouillon indexe remonterait
+# dans la recherche publique avec son titre, ce qui suffit a reveler ce qui
+# n'est pas encore sorti.
+verif("l'index de recherche ne contient que les articles visibles",
+      pt["indexes"] == pt["visibles"],
+      "index=%d visibles=%d" % (pt["indexes"], pt["visibles"]))
+SLUG_ARTICLE = pt["slug_publie"]
+verif("un article publie sert de reference", SLUG_ARTICLE != "", SLUG_ARTICLE)
+
+# --- ce qui n'est pas publie ne fuit nulle part ------------------------
+for etiquette, slug in (("brouillon", pt["slug_brouillon"]), ("programme", pt["slug_programme"])):
+    verif("404 anonyme sur l'article %s" % etiquette,
+          anon.get(BASE + "/a/" + slug).status_code == 404, slug)
+html_actu = anon.get(BASE + "/actualites").text
+verif("le brouillon n'apparait pas dans /actualites",
+      pt["slug_brouillon"] not in html_actu)
+verif("l'article programme n'apparait pas dans /actualites",
+      pt["slug_programme"] not in html_actu)
+r = anon.get(BASE + "/recherche", params={"q": "programme demonstration", "espace": "portail"})
+verif("l'article programme est introuvable par la recherche",
+      pt["slug_programme"] not in r.text)
+
+verif("GET /a/%s" % SLUG_ARTICLE,
+      anon.get(BASE + "/a/" + SLUG_ARTICLE).status_code == 200)
+html_art = anon.get(BASE + "/a/" + SLUG_ARTICLE).text
+verif("la page d'article annonce ses sources ou leur absence",
+      "portail_sources" not in html_art
+      and ("<ol class=\"sources\">" in html_art or "vide-etat" in html_art))
+
+# --- la recherche couvre l'espace portail ------------------------------
+r = anon.get(BASE + "/recherche", params={"q": "source", "espace": "portail"})
+n = len(set(re.findall(r'href="(/a/[a-z0-9-]+)"', r.text)))
+verif("la recherche trouve des articles dans l'espace portail", n >= 2,
+      "%d articles" % n)
+r = anon.get(BASE + "/api/v1/recherche", params={"q": "source", "espace": "portail"})
+verif("l'API cherche aussi dans le portail",
+      r.status_code == 200 and r.json().get("total", 0) >= 2, str(r.json().get("total")))
+
+# --- l'API n'a pas de mode apercu --------------------------------------
+verif("l'API refuse un brouillon",
+      anon.get(BASE + "/api/v1/articles/" + pt["slug_brouillon"]).status_code == 404)
+j = anon.get(BASE + "/api/v1/articles/" + SLUG_ARTICLE).json()
+verif("l'API sert le HTML deja assaini", "rendu" in j and "<" in j["rendu"])
+verif("l'API expose les rubriques du portail",
+      len(anon.get(BASE + "/api/v1/portail").json().get("rubriques", [])) >= 5)
+
+# --- adresses : ASCII partout ------------------------------------------
+# Les motifs de la table de routage s'ecrivent [\w\-]+, et \w sans /u ne
+# couvre que l'ASCII. Une adresse contenant une lettre non latine repond
+# donc 404 alors que la ligne existe : c'est exactement ce qui arrivait a
+# une discussion arabe avant que slug() ne soit ramene a l'ASCII.
+code, sortie = php(os.path.join("tests", "portail.php"), "slugs")
+sl = json.loads(sortie.strip().splitlines()[-1])
+verif("aucune adresse non-ASCII en base", sl["non_ascii"] == 0, str(sl["exemples"]))
+
+# --- redaction : permissions -------------------------------------------
+verif("un anonyme n'atteint pas la gestion du portail",
+      anon.get(BASE + "/admin/articles").status_code in (401, 403),
+      str(anon.get(BASE + "/admin/articles").status_code))
+verif("un membre simple n'atteint pas la gestion du portail",
+      s.get(BASE + "/admin/articles").status_code == 403,
+      str(s.get(BASE + "/admin/articles").status_code))
+r = s.post(BASE + "/admin/articles",
+           data={"_csrf": csrf(s, "/") or "x", "titre": "Controle automatique interdit",
+                 "corps": "ne doit pas passer"})
+verif("un membre simple ne peut pas ecrire d'article",
+      r.status_code in (401, 403, 419), str(r.status_code))
+
+# Le compte de controle devient redacteur. La suite s'inscrit par HTTP —
+# le seul chemin d'inscription du site — puis on lui donne le metier.
+code, sortie = php(os.path.join("tests", "portail.php"), "redacteur", PSEUDO)
+verif("le compte de controle devient redacteur", code == 0, sortie.strip()[-60:])
+sr = requests.Session()
+j = csrf(sr, "/connexion")
+sr.post(BASE + "/connexion", data={"_csrf": j, "identifiant": PSEUDO, "mot_de_passe": MDP},
+        allow_redirects=True)
+verif("le redacteur atteint la gestion du portail",
+      sr.get(BASE + "/admin/articles").status_code == 200)
+
+# --- ecriture d'un article ---------------------------------------------
+TITRE_ART = "Controle automatique %s : article du portail" % suffixe
+j = csrf(sr, "/admin/articles/nouveau")
+r = sr.post(BASE + "/admin/articles", data={
+    "_csrf": j, "titre": TITRE_ART, "chapeau": "Chapeau de controle.",
+    "corps": ("Texte de controle avec un **gras**, un [lien](https://exemple.test/) "
+              "et une balise interdite : <script>alert(1)</script> "
+              "ainsi que <img src=x onerror=alert(2)>."),
+    "langue": "fr", "rubrique_id": "", "ville_id": "", "signature": "Controle",
+    "statut": "publie", "une": "", "rang_une": "100", "publie_le": "", "groupe": "",
+}, allow_redirects=True)
+verif("le redacteur publie un article", r.status_code == 200 and TITRE_ART in r.text,
+      "url %s" % r.url)
+m = re.search(r"/admin/articles/(\d+)", r.url)
+AID = m.group(1) if m else None
+verif("identifiant d'article recupere", AID is not None, str(r.url))
+
+code, sortie = php("-r",
+                   "require 'tests/_amorce.php'; "
+                   "echo qval('SELECT slug FROM articles WHERE id = ?', [%s]);" % (AID or 0))
+SLUG_NEUF = sortie.strip().splitlines()[-1]
+r = anon.get(BASE + "/a/" + SLUG_NEUF)
+verif("l'article publie est lisible sans compte", r.status_code == 200, SLUG_NEUF)
+verif("le gras de l'article est rendu", "<strong>gras</strong>" in r.text)
+# On n'accepte JAMAIS de HTML : le corps est echappe en entier puis on
+# re-injecte les seules balises qu'on ecrit soi-meme. Il ne doit donc rester
+# aucune balise venue du texte saisi.
+# Le HTML saisi doit etre ECHAPPE, pas retire. « onerror= » figure donc bien
+# dans la page — en texte, a l'interieur de &lt;img …&gt;. Chercher l'absence
+# de la chaine serait un controle faux : il echouerait sur un comportement
+# correct. Ce qu'on verifie, c'est qu'aucune BALISE issue du texte n'existe.
+verif("aucune balise <script> venue du texte", "<script>alert(1)" not in r.text)
+verif("le <script> saisi apparait echappe", "&lt;script&gt;alert(1)" in r.text)
+verif("aucune balise <img> venue du texte", "<img src=x" not in r.text)
+verif("le <img onerror> saisi apparait echappe", "&lt;img src=x onerror=" in r.text)
+verif("le lien sortant porte rel=nofollow",
+      'rel="nofollow noopener ugc"' in r.text)
+
+# --- programmation : la date est relue a CHAQUE affichage --------------
+FUTUR = time.strftime("%Y-%m-%d %H:%M", time.gmtime(time.time() + 3 * 86400))
+TITRE_PROG = "Controle automatique %s : article programme" % suffixe
+j = csrf(sr, "/admin/articles/nouveau")
+r = sr.post(BASE + "/admin/articles", data={
+    "_csrf": j, "titre": TITRE_PROG, "chapeau": "", "corps": "Programme.",
+    "langue": "fr", "statut": "publie", "publie_le": FUTUR, "rang_une": "100",
+}, allow_redirects=True)
+m = re.search(r"/admin/articles/(\d+)", r.url)
+code, sortie = php("-r",
+                   "require 'tests/_amorce.php'; "
+                   "echo qval('SELECT slug FROM articles WHERE id = ?', [%s]);"
+                   % (m.group(1) if m else 0))
+SLUG_PROG = sortie.strip().splitlines()[-1]
+verif("l'article programme repond 404 au public",
+      anon.get(BASE + "/a/" + SLUG_PROG).status_code == 404, "publie_le=%s UTC" % FUTUR)
+verif("l'article programme est visible en apercu pour le redacteur",
+      sr.get(BASE + "/a/" + SLUG_PROG).status_code == 200)
+verif("l'apercu porte un noindex",
+      'name="robots" content="noindex, nofollow"' in sr.get(BASE + "/a/" + SLUG_PROG).text)
+verif("l'article programme n'est pas dans /actualites",
+      SLUG_PROG not in anon.get(BASE + "/actualites").text)
+
+# --- publier est une permission separee de rediger ---------------------
+# L'interface cache le bouton ; ce controle verifie que le SERVEUR refuse,
+# ce qui est la seule chose qui protege.
+code, sortie = php(os.path.join("tests", "portail.php"), "revoque-publier")
+verif("portail.publier retiree au role redacteur", code == 0, sortie.strip()[-50:])
+TITRE_REF = "Controle automatique %s : publication refusee" % suffixe
+j = csrf(sr, "/admin/articles/nouveau")
+r = sr.post(BASE + "/admin/articles", data={
+    "_csrf": j, "titre": TITRE_REF, "chapeau": "", "corps": "Doit rester en brouillon.",
+    "langue": "fr", "statut": "publie", "rang_une": "100",
+}, allow_redirects=True)
+code, sortie = php("-r",
+                   "require 'tests/_amorce.php'; "
+                   "$a = qun('SELECT statut, slug FROM articles WHERE titre = ?', ['%s']); "
+                   "echo json_encode($a);" % TITRE_REF)
+etat = json.loads(sortie.strip().splitlines()[-1] or "{}")
+verif("sans portail.publier, le serveur ramene l'article a brouillon",
+      etat.get("statut") == "brouillon", str(etat.get("statut")))
+verif("et l'article reste 404 pour le public",
+      anon.get(BASE + "/a/" + str(etat.get("slug"))).status_code == 404)
+code, sortie = php(os.path.join("tests", "portail.php"), "rend-publier")
+verif("portail.publier rendue au role redacteur", code == 0, sortie.strip()[-50:])
+
+# --- l'article ouvre une discussion dans le forum ----------------------
+j = csrf(sr, "/a/" + SLUG_NEUF)
+r = sr.post(BASE + "/portail/discussion", data={"_csrf": j, "article": AID},
+            allow_redirects=True)
+verif("l'article ouvre une discussion dans le forum",
+      r.status_code == 200 and "/d/" in r.url, r.url)
+verif("la discussion pointe vers l'article par un vrai lien",
+      ('href="/a/' + SLUG_NEUF + '"') in r.text, "lien interne rendu")
+verif("la discussion ne recopie pas le texte de l'article",
+      "Texte de controle avec un" not in r.text)
+verif("la page d'article renvoie ensuite vers la discussion",
+      "/d/" in anon.get(BASE + "/a/" + SLUG_NEUF).text)
+
+# --- flux RSS et sitemap : 503 sans domaine, corrects avec -------------
+r = anon.get(BASE + "/flux.xml")
+verif("le flux RSS repond 503 tant que le domaine est vide", r.status_code == 503,
+      str(r.status_code))
+verif("et il explique pourquoi", "domaine" in r.text.lower())
+
+DOMAINE_TEST = "https://exemple.test"
+CHEMIN_CONF = os.path.join(RACINE, "src", "config.local.php")
+sauvegarde_conf = open(CHEMIN_CONF, "rb").read()
+try:
+    code, sortie = php(os.path.join("tests", "portail.php"), "domaine", DOMAINE_TEST)
+    ecrit = DOMAINE_TEST in open(CHEMIN_CONF, "r", encoding="utf-8").read()
+    verif("le domaine de test est ecrit dans la configuration",
+          code == 0 and ecrit, sortie.strip()[-60:])
+
+    # Le fichier est ecrit, mais le SERVEUR ne le voit pas tout de suite.
+    # Mesure sur cette machine : jusqu'a trois secondes entre l'ecriture et
+    # la premiere requete qui en tient compte. C'est le comportement normal
+    # d'un cache de bytecode (opcache revalide par fenetres de quelques
+    # secondes) et il se reproduira sur l'hebergement.
+    #
+    # On ATTEND donc que le serveur ait pris le changement, au lieu de
+    # conclure sur la premiere reponse. Sans cette boucle, le controle
+    # echouait pour une raison qui n'avait rien a voir avec le flux.
+    debut = time.time()
+    while time.time() - debut < 15:
+        if "Sitemap:" in anon.get(BASE + "/robots.txt").text:
+            break
+        time.sleep(0.5)
+    verif("le serveur a pris le nouveau domaine",
+          "Sitemap:" in anon.get(BASE + "/robots.txt").text,
+          "%.1f s d'attente" % (time.time() - debut))
+
+    r = anon.get(BASE + "/flux.xml")
+    flux_emis = r.status_code == 200 and r.text.lstrip().startswith("<?xml")
+    verif("avec un domaine, le flux RSS est emis", flux_emis,
+          "%d — %s" % (r.status_code, r.text[:80].replace("\n", " ")))
+    # Les trois controles suivants portent sur le CONTENU du flux. Ils
+    # exigent donc que le flux ait ete emis : sur une reponse 503 ils
+    # passeraient au vert en ne trouvant rien, ce qui est exactement la
+    # facon dont un controle cesse de prouver quoi que ce soit.
+    verif("le flux ne contient que des adresses absolues",
+          flux_emis and r.text.count("<link>") >= 3
+          and ("<link>" + DOMAINE_TEST) in r.text)
+    verif("le flux ne contient ni brouillon ni article programme",
+          flux_emis and pt["slug_brouillon"] not in r.text
+          and pt["slug_programme"] not in r.text and SLUG_PROG not in r.text)
+    r = anon.get(BASE + "/sitemap.xml")
+    plan_emis = r.status_code == 200
+    verif("avec un domaine, le sitemap liste les articles",
+          plan_emis and ("/a/" + SLUG_ARTICLE) in r.text,
+          "%d — %s" % (r.status_code, r.text[:80].replace("\n", " ")))
+    verif("le sitemap n'expose pas ce qui n'est pas en ligne",
+          plan_emis and ("/a/" + pt["slug_brouillon"]) not in r.text
+          and ("/a/" + SLUG_PROG) not in r.text)
+    verif("le sitemap liste les rubriques", plan_emis and "/r/debats" in r.text)
+finally:
+    # Restauration OCTET POUR OCTET du fichier de configuration. Un test qui
+    # laisse un domaine en place derriere lui ferait passer le controle
+    # « 503 sans domaine » a la faveur de son propre effet de bord, a
+    # l'execution suivante.
+    open(os.path.join(RACINE, "src", "config.local.php"), "wb").write(sauvegarde_conf)
+verif("la configuration est rendue a l'identique",
+      open(CHEMIN_CONF, "rb").read() == sauvegarde_conf)
+# Meme attente qu'a l'aller, et pour la meme raison : le serveur met
+# quelques secondes a revoir le fichier. Sans elle, ce controle echouait
+# alors que la configuration etait deja remise en place — la preuve, s'il
+# en fallait une, que le premier n'attendait pas par precaution mais parce
+# que le delai est reel.
+debut = time.time()
+while time.time() - debut < 15:
+    if anon.get(BASE + "/flux.xml").status_code == 503:
+        break
+    time.sleep(0.5)
+verif("et le flux repond de nouveau 503",
+      anon.get(BASE + "/flux.xml").status_code == 503,
+      "%.1f s d'attente" % (time.time() - debut))
+
+# --- une adresse issue d'un titre entierement non latin reste joignable -
+TITRE_AR = "Controle automatique %s : مقال بالعربية" % suffixe
+j = csrf(sr, "/admin/articles/nouveau")
+r = sr.post(BASE + "/admin/articles", data={
+    "_csrf": j, "titre": TITRE_AR, "chapeau": "", "corps": "نص التحقق.",
+    "langue": "ar", "statut": "publie", "rang_une": "100",
+}, allow_redirects=True)
+m = re.search(r"/admin/articles/(\d+)", r.url)
+code, sortie = php("-r",
+                   "require 'tests/_amorce.php'; "
+                   "echo qval('SELECT slug FROM articles WHERE id = ?', [%s]);"
+                   % (m.group(1) if m else 0))
+SLUG_AR = sortie.strip().splitlines()[-1]
+verif("le slug d'un titre arabe est en ASCII",
+      re.fullmatch(r"[a-z0-9-]+", SLUG_AR) is not None, SLUG_AR)
+verif("et son adresse repond bien 200",
+      anon.get(BASE + "/a/" + SLUG_AR).status_code == 200, "/a/" + SLUG_AR)
+
+# --- purge de demonstration : les articles en font partie --------------
+code, sortie = php(os.path.join("outils", "purge-demo.php"), "--compter")
+verif("purge-demo compte les articles de demonstration",
+      re.search(r"articles\s+([1-9]\d*)", sortie) is not None,
+      "; ".join(l.strip() for l in sortie.splitlines() if "articles" in l)[:60])
+
+# ======================================================================
+titre("12. Rendu reel dans un navigateur : contraste, debordement, JS")
 # ======================================================================
 
 try:
@@ -601,7 +901,9 @@ if sync_playwright:
         pg.on("console", lambda m: erreurs_console.append(m.text) if m.type == "error" else None)
         pg.on("pageerror", lambda e: erreurs_console.append(str(e)))
 
-        a_verifier = ["/", "/forums", "/f/s-transport", "/villes", "/v/paris",
+        a_verifier = ["/", "/actualites", "/r/debats", "/a/" + SLUG_ARTICLE,
+                      "/communaute",
+                      "/forums", "/f/s-transport", "/villes", "/v/paris",
                       "/pays/france", "/continent/europe", "/d/" + SLUG,
                       "/recherche?q=citation", "/projets", "/aide", "/a-renseigner",
                       "/connexion", "/inscription"]
@@ -675,7 +977,7 @@ if sync_playwright:
         nav.close()
 
 # ======================================================================
-titre("12. Les valeurs absentes restent visibles et comptees")
+titre("13. Les valeurs absentes restent visibles et comptees")
 # ======================================================================
 
 html = anon.get(BASE + "/a-renseigner").text
@@ -701,12 +1003,24 @@ verif("aucun tiret cadratin seul comme valeur",
       not re.search(r">\s*—\s*</p>", html))
 
 # ======================================================================
-titre("13. La suite nettoie ce qu'elle a cree")
+titre("14. La suite nettoie ce qu'elle a cree")
 # ======================================================================
 
 # Le contenu produit ici n'est PAS marque demo = 1 : il est cree par HTTP,
 # exactement comme celui d'un membre. purge-demo.php ne le verrait donc pas,
 # et il finirait par occuper tout l'accueil du site de demonstration.
+#
+# Les ARTICLES d'abord : ils portent une discussion et des entrees d'index
+# qui doivent partir avec eux, et leur auteur est le compte « testeur_… »
+# que l'etape suivante va supprimer.
+code, sortie = php(os.path.join("tests", "portail.php"), "nettoyer")
+try:
+    art = json.loads(sortie.strip().splitlines()[-1])
+except Exception:
+    art = {}
+verif("les articles de controle sont supprimes", art.get("restant") == 0,
+      "supprimes=%s restant=%s" % (art.get("articles"), art.get("restant")))
+
 code, sortie = php(os.path.join("tests", "nettoyage.php"), "--supprimer")
 try:
     net = json.loads(sortie.strip().splitlines()[-1])

@@ -12,6 +12,7 @@ require $racine . '/src/notifications.php';
 require $racine . '/src/moderation.php';
 require $racine . '/src/medias.php';
 require $racine . '/src/vue.php';
+require $racine . '/src/portail.php';
 
 function en_tant_que(string $pseudo): array
 {

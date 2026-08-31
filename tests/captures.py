@@ -31,41 +31,69 @@ def slug_demo(motif):
     return r.stdout.strip()
 
 
+def slug_article(motif):
+    r = subprocess.run(
+        ["php", "-r",
+         "require 'src/noyau.php'; echo (string) qval("
+         "'SELECT slug FROM articles WHERE titre LIKE ? AND statut = ? ORDER BY id LIMIT 1', "
+         "['%s%%', 'publie']);" % motif],
+        cwd=RACINE, capture_output=True, text=True)
+    return r.stdout.strip()
+
+
 DISC = slug_demo("Comment écrire un message")
 DISC_AR = slug_demo("المشاركة بالعربية")
+ART = slug_article("Ce que ce portail publie")
+ART2 = slug_article("Comment proposer un article")
+ART_AR = slug_article("ما تنشره")
 
 # nom, chemin, largeur, hauteur, defilement (px)
+# Le portail vient en tete : c'est la premiere page que voit un visiteur.
 VUES = [
-    ("uf-01-accueil",        "/",                          1280, 720, 0),
-    ("uf-02-accueil-monde",  "/",                          1280, 720, 900),
-    ("uf-03-forums",         "/forums",                    1280, 720, 120),
-    ("uf-04-forum-ville",    "/f/v-alger",                 1280, 720, 0),
-    ("uf-05-discussion",     "/d/" + DISC,                 1280, 720, 0),
-    ("uf-06-discussion-bas", "/d/" + DISC,                 1280, 720, 1400),
-    ("uf-07-recherche",      "/recherche?q=citation",      1280, 720, 0),
-    ("uf-08-villes",         "/villes",                    1280, 720, 0),
-    ("uf-09-pays",           "/pays/algerie",              1280, 720, 0),
-    ("uf-10-projets",        "/projets",                   1280, 720, 0),
-    ("uf-11-arabe-rtl",      "/?lang=ar",                  1280, 720, 0),
-    ("uf-12-arabe-message",  "/d/" + DISC_AR + "?lang=ar", 1280, 720, 0),
-    ("uf-13-anglais",        "/forums?lang=en",            1280, 720, 0),
-    ("uf-14-a-renseigner",   "/a-renseigner",              1280, 720, 0),
-    ("uf-15-inscription",    "/inscription",               1280, 720, 0),
-    ("uf-16-mobile",         "/",                           390, 760, 0),
-    ("uf-17-mobile-disc",    "/d/" + DISC,                  390, 760, 300),
-    ("uf-18-mobile-arabe",   "/?lang=ar",                   390, 760, 0),
+    ("uf-01-portail",        "/",                          1280, 720, 0),
+    ("uf-02-portail-une",    "/",                          1280, 720, 620),
+    ("uf-03-portail-rub",    "/",                          1280, 720, 1500),
+    ("uf-04-actualites",     "/actualites",                1280, 720, 0),
+    ("uf-05-rubrique",       "/r/projets",                 1280, 720, 0),
+    ("uf-06-article",        "/a/" + ART,                  1280, 720, 0),
+    ("uf-07-article-corps",  "/a/" + ART,                  1280, 720, 700),
+    ("uf-08-article-sources", "/a/" + ART,                 1280, 720, 1500),
+    ("uf-09-article-2",      "/a/" + ART2,                 1280, 720, 0),
+    ("uf-10-portail-arabe",  "/?lang=ar",                  1280, 720, 0),
+    ("uf-11-article-arabe",  "/a/" + ART_AR + "?lang=ar",  1280, 720, 0),
+    ("uf-12-portail-anglais", "/?lang=en",                 1280, 720, 0),
+    ("uf-13-recherche-portail", "/recherche?q=source&espace=portail", 1280, 720, 0),
+    ("uf-14-communaute",     "/communaute",                1280, 720, 0),
+    ("uf-15-forums",         "/forums",                    1280, 720, 120),
+    ("uf-16-forum-ville",    "/f/v-alger",                 1280, 720, 0),
+    ("uf-17-discussion",     "/d/" + DISC,                 1280, 720, 0),
+    ("uf-18-discussion-bas", "/d/" + DISC,                 1280, 720, 1400),
+    ("uf-19-recherche",      "/recherche?q=citation",      1280, 720, 0),
+    ("uf-20-villes",         "/villes",                    1280, 720, 0),
+    ("uf-21-pays",           "/pays/algerie",              1280, 720, 0),
+    ("uf-22-projets",        "/projets",                   1280, 720, 0),
+    ("uf-23-arabe-message",  "/d/" + DISC_AR + "?lang=ar", 1280, 720, 0),
+    ("uf-24-a-renseigner",   "/a-renseigner",              1280, 720, 0),
+    ("uf-25-inscription",    "/inscription",               1280, 720, 0),
+    ("uf-26-mobile-portail", "/",                           390, 760, 0),
+    ("uf-27-mobile-article", "/a/" + ART,                   390, 760, 200),
+    ("uf-28-mobile-disc",    "/d/" + DISC,                  390, 760, 300),
+    ("uf-29-mobile-arabe",   "/?lang=ar",                   390, 760, 0),
 ]
 
 # Pages qui exigent un compte : on ouvre une session dans le navigateur.
 CONNECTE = [
-    ("uf-19-moderation",     "/moderation",                1280, 720, 0),
-    ("uf-20-journal-mod",    "/moderation/journal",        1280, 720, 0),
-    ("uf-21-admin",          "/admin",                     1280, 720, 0),
-    ("uf-22-admin-bas",      "/admin",                     1280, 720, 700),
-    ("uf-23-taxonomie",      "/admin/taxonomie",           1280, 720, 0),
-    ("uf-24-permissions",    "/admin/permissions",         1280, 720, 0),
-    ("uf-25-nouvelle",       "/nouvelle-discussion",       1280, 720, 0),
-    ("uf-26-notifications",  "/notifications",             1280, 720, 0),
+    ("uf-30-gestion-portail", "/admin/articles",           1280, 720, 0),
+    ("uf-31-redaction",      "/admin/articles/nouveau",    1280, 720, 0),
+    ("uf-32-redaction-bas",  "/admin/articles/nouveau",    1280, 720, 700),
+    ("uf-33-moderation",     "/moderation",                1280, 720, 0),
+    ("uf-34-journal-mod",    "/moderation/journal",        1280, 720, 0),
+    ("uf-35-admin",          "/admin",                     1280, 720, 0),
+    ("uf-36-admin-bas",      "/admin",                     1280, 720, 700),
+    ("uf-37-taxonomie",      "/admin/taxonomie",           1280, 720, 0),
+    ("uf-38-permissions",    "/admin/permissions",         1280, 720, 0),
+    ("uf-39-nouvelle",       "/nouvelle-discussion",       1280, 720, 0),
+    ("uf-40-notifications",  "/notifications",             1280, 720, 0),
 ]
 
 MDP_ADMIN = os.environ.get("UF_ADMIN_MDP", "")

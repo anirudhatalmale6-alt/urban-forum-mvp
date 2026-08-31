@@ -61,10 +61,17 @@ $canonique = cfg('domaine') ? url($m['canonique'] ?? ($_SERVER['REQUEST_URI'] ??
     </button>
 
     <nav id="nav-principale" class="nav" aria-label="<?= h(t('nav_forums')) ?>">
+      <a href="<?= h(lien('/actualites')) ?>"><?= h(t('portail_actualites')) ?></a>
       <a href="<?= h(lien('/forums')) ?>"><?= h(t('nav_forums')) ?></a>
       <a href="<?= h(lien('/villes')) ?>"><?= h(t('nav_villes')) ?></a>
       <a href="<?= h(lien('/projets')) ?>"><?= h(t('nav_projets')) ?></a>
-      <a href="<?= h(lien('/recherche')) ?>"><?= h(t('nav_recherche')) ?></a>
+      <?php /* Pas de lien « Recherche » ici : le champ de recherche est juste
+               a cote, avec son propre bouton du meme nom. Deux commandes
+               identiques cote a cote font perdre une ligne d'entete a
+               1280 px et n'apportent rien. */ ?>
+      <?php if ($u && peut('portail.rediger')): ?>
+        <a href="<?= h(lien('/admin/articles')) ?>"><?= h(t('portail_gestion')) ?></a>
+      <?php endif; ?>
       <?php if ($u && peut('moderation.file')): ?>
         <a href="<?= h(lien('/moderation')) ?>"><?= h(t('nav_moderation')) ?></a>
       <?php endif; ?>
@@ -78,7 +85,21 @@ $canonique = cfg('domaine') ? url($m['canonique'] ?? ($_SERVER['REQUEST_URI'] ??
       <label class="hors-ecran" for="q-rapide"><?= h(t('nav_recherche')) ?></label>
       <input id="q-rapide" type="search" name="q" placeholder="<?= h(t('rech_placeholder')) ?>"
              value="<?= h($_GET['q'] ?? '') ?>" autocomplete="off">
-      <button type="submit"><?= h(t('nav_recherche')) ?></button>
+      <?php /* Bouton a la loupe. Avec le mot « Recherche » ecrit dedans, le
+               bouton mangeait les deux tiers de la largeur du bloc et il ne
+               restait qu'une soixantaine de pixels pour le champ — mesure a
+               l'ecran, pas devinee. Le nom reste lu par les lecteurs
+               d'ecran via .hors-ecran et par title. Le SVG est en ligne
+               dans le document : aucune requete, et la CSP ne bloque que le
+               STYLE en ligne, pas le balisage. */ ?>
+      <button type="submit" title="<?= h(t('nav_recherche')) ?>">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+          <circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="2"></circle>
+          <line x1="11" y1="11" x2="15" y2="15" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round"></line>
+        </svg>
+        <span class="hors-ecran"><?= h(t('nav_recherche')) ?></span>
+      </button>
     </form>
 
     <div class="compte">
@@ -118,11 +139,14 @@ $canonique = cfg('domaine') ? url($m['canonique'] ?? ($_SERVER['REQUEST_URI'] ??
       <p class="pied__ligne"><?= t('accueil_intro') ?></p>
     </div>
     <nav aria-label="<?= h(t('sitemap')) ?>">
+      <a href="<?= h(lien('/actualites')) ?>"><?= h(t('portail_actualites')) ?></a>
+      <a href="<?= h(lien('/communaute')) ?>"><?= h(t('nav_communaute')) ?></a>
       <a href="<?= h(lien('/forums')) ?>"><?= h(t('nav_forums')) ?></a>
       <a href="<?= h(lien('/villes')) ?>"><?= h(t('nav_villes')) ?></a>
       <a href="<?= h(lien('/projets')) ?>"><?= h(t('nav_projets')) ?></a>
       <a href="<?= h(lien('/aide')) ?>"><?= h(t('nav_aide')) ?></a>
       <a href="/sitemap.xml"><?= h(t('sitemap')) ?></a>
+      <a href="/flux.xml"><?= h(t('portail_flux')) ?></a>
       <a href="<?= h(lien('/a-renseigner')) ?>"><?= h(t('nav_a_renseigner')) ?></a>
     </nav>
     <div class="pied__legal">

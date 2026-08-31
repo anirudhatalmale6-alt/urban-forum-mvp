@@ -19,6 +19,9 @@ const PERMISSIONS = [
     'forum.signaler'        => 'Signaler un contenu',
     'projet.proposer'       => 'Proposer une fiche projet ou une mise a jour',
     'projet.publier'        => 'Publier directement une fiche projet',
+    'portail.rediger'       => 'Ecrire un article et l\'enregistrer en brouillon',
+    'portail.publier'       => 'Publier ou retirer un article du portail',
+    'portail.une'           => 'Choisir ce qui remonte a la une du portail',
     'moderation.file'       => 'Voir et traiter la file des signalements',
     'moderation.contenu'    => 'Masquer, epingler, verrouiller, deplacer, fusionner',
     'moderation.sanction'   => 'Avertir, suspendre, bannir',
@@ -60,11 +63,25 @@ const ROLES = [
                     'forum.reagir', 'forum.televerser', 'forum.signaler',
                     'projet.proposer'],
     ],
+    /* Le portail a son propre metier. Un redacteur ecrit et publie des
+       articles ; il ne masque pas un message et ne suspend personne. C'est
+       exactement pour cela que l'autorisation passe par des permissions et
+       non par un rang : un redacteur (40) est « au-dessus » d'un
+       contributeur verifie (30) sans hériter de la moindre capacite de
+       moderation. */
+    'redacteur' => [
+        'rang' => 40, 'fr' => 'Redacteur', 'en' => 'Editor', 'ar' => 'محرّر',
+        'perms' => ['forum.lire', 'forum.publier', 'forum.editer_sien',
+                    'forum.reagir', 'forum.televerser', 'forum.signaler',
+                    'projet.proposer',
+                    'portail.rediger', 'portail.publier', 'portail.une'],
+    ],
     'moderateur' => [
         'rang' => 50, 'fr' => 'Moderateur', 'en' => 'Moderator', 'ar' => 'مشرف',
         'perms' => ['forum.lire', 'forum.publier', 'forum.editer_sien',
                     'forum.reagir', 'forum.televerser', 'forum.signaler',
                     'projet.proposer', 'projet.publier',
+                    'portail.rediger', 'portail.publier', 'portail.une',
                     'moderation.file', 'moderation.contenu', 'moderation.sanction'],
     ],
     'administrateur' => [
@@ -164,6 +181,47 @@ function role_de(?array $u): array
     return (ROLES[$cle] ?? ROLES['membre']) + ['cle' => $cle];
 }
 
+/**
+ * Les permissions d'un role, LUES EN BASE.
+ *
+ * La constante ROLES declare la configuration livree ; c'est elle que
+ * l'installeur ecrit dans `role_permissions`. Mais c'est la TABLE qui fait
+ * foi a l'execution — sinon la table n'est qu'un decor, la page
+ * d'administration des permissions ne peut rien changer, et le modele de la
+ * section 9 (Role, Permission, et la liaison entre les deux) ne veut rien
+ * dire.
+ *
+ * Deux garde-fous :
+ *
+ * - un role declare « * » reste tout-puissant sans passer par la table. Une
+ *   permission ajoutee dans le code apres la derniere installation manquerait
+ *   sinon a l'administrateur, qui se retrouverait enferme dehors de sa propre
+ *   plateforme.
+ * - un role SANS AUCUNE ligne en base retombe sur la declaration du code.
+ *   Une table vide veut dire « pas encore installe », pas « plus aucun
+ *   droit » : on retombe sur le defaut declare, jamais sur une ouverture.
+ */
+function permissions_de_role(string $cle)
+{
+    static $cache = [];
+    if (array_key_exists($cle, $cache)) return $cache[$cle];
+
+    $declare = ROLES[$cle]['perms'] ?? [];
+    if ($declare === '*') return $cache[$cle] = '*';
+
+    try {
+        $lignes = qtous(
+            'SELECT p.cle FROM role_permissions rp
+             JOIN roles r ON r.id = rp.role_id
+             JOIN permissions p ON p.id = rp.permission_id
+             WHERE r.cle = ?', [$cle]);
+    } catch (Throwable) {
+        return $cache[$cle] = $declare;      // avant installation
+    }
+    $en_base = array_column($lignes, 'cle');
+    return $cache[$cle] = $en_base ?: $declare;
+}
+
 function peut(string $permission, ?array $u = null): bool
 {
     $u = $u ?? utilisateur();
@@ -177,9 +235,9 @@ function peut(string $permission, ?array $u = null): bool
     }
     if ($u && (int) $u['banni'] === 1) return $permission === 'forum.lire';
 
-    $role = role_de($u);
-    if (($role['perms'] ?? null) === '*') return true;
-    return in_array($permission, $role['perms'] ?? [], true);
+    $perms = permissions_de_role(role_de($u)['cle']);
+    if ($perms === '*') return true;
+    return in_array($permission, $perms, true);
 }
 
 function exige(string $permission): void

@@ -10,6 +10,7 @@
       <label for="espace"><?= h(t('rech_filtres')) ?></label>
       <select id="espace" name="espace">
         <option value="forum"<?= $espace === 'forum' ? ' selected' : '' ?>><?= h(t('rech_dans_forum')) ?></option>
+        <option value="portail"<?= $espace === 'portail' ? ' selected' : '' ?>><?= h(t('rech_dans_portail')) ?></option>
         <option value="projets"<?= $espace === 'projets' ? ' selected' : '' ?>><?= h(t('rech_dans_projets')) ?></option>
       </select>
     </div>
